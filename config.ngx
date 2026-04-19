@@ -1,0 +1,15 @@
+# nxe-json/config.ngx — nginx build configuration
+#
+# Sourced by parent module's config file.
+# Prerequisite: $nxe_json_dir must be set by the caller.
+
+nxe_json_module_deps="\
+  $nxe_json_dir/src/nxe_json.h \
+"
+nxe_json_module_srcs="\
+  $nxe_json_dir/src/nxe_json.c \
+"
+nxe_json_module_incs="\
+  $nxe_json_dir/src \
+"
+nxe_json_module_libs="-ljansson"

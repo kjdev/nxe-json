@@ -855,6 +855,24 @@ TEST(stringify_compact_basic){
 }
 
 
+TEST(stringify_encodes_scalar_root){
+    /* nxe_json_parse accepts scalar roots via JSON_DECODE_ANY;
+     * stringify must round-trip them (requires JSON_ENCODE_ANY). */
+    ngx_str_t input = sz("42");
+    nxe_json_t *root;
+    ngx_str_t *out;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    out = nxe_json_stringify_compact(root, pool);
+    ASSERT(out != NULL);
+    ASSERT_STR_EQ(*out, "42");
+
+    nxe_json_free(root);
+}
+
+
 TEST(stringify_compact_roundtrip){
     ngx_str_t input = sz("[1,2,3]");
     nxe_json_t *root;
@@ -867,6 +885,85 @@ TEST(stringify_compact_roundtrip){
     ASSERT(out != NULL);
     ASSERT_STR_EQ(*out, "[1,2,3]");
 
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_pretty_has_newlines_and_indent){
+    ngx_str_t input = sz("{\"a\":1,\"b\":[2,3]}");
+    nxe_json_t *root;
+    ngx_str_t *out;
+    size_t newlines = 0;
+    size_t i;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    out = nxe_json_stringify_pretty(root, pool, 2);
+    ASSERT(out != NULL);
+
+    for (i = 0; i < out->len; i++) {
+        if (out->data[i] == '\n') {
+            newlines++;
+        }
+    }
+    ASSERT(newlines >= 2);
+
+    {
+        nxe_json_t *reparsed;
+        nxe_json_t *b;
+
+        reparsed = nxe_json_parse(out, pool);
+        ASSERT(reparsed != NULL);
+        ASSERT_EQ_INT(nxe_json_equal(root, reparsed), 1);
+
+        b = nxe_json_object_get(reparsed, "b");
+        ASSERT(b != NULL);
+        ASSERT_EQ_INT(nxe_json_array_size(b), 2);
+
+        nxe_json_free(reparsed);
+    }
+
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_pretty_clamps_indent){
+    ngx_str_t input = sz("[1]");
+    nxe_json_t *root;
+    ngx_str_t *out_zero, *out_huge;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    out_zero = nxe_json_stringify_pretty(root, pool, 0);
+    ASSERT(out_zero != NULL);
+    ASSERT(out_zero->len > 3);
+
+    out_huge = nxe_json_stringify_pretty(root, pool, 100);
+    ASSERT(out_huge != NULL);
+    {
+        nxe_json_t *reparsed = nxe_json_parse(out_huge, pool);
+        ASSERT(reparsed != NULL);
+        nxe_json_free(reparsed);
+    }
+
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_pretty_null_inputs){
+    ngx_str_t *out;
+    ngx_str_t input = sz("[1]");
+    nxe_json_t *root;
+
+    out = nxe_json_stringify_pretty(NULL, pool, 2);
+    ASSERT(out == NULL);
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    out = nxe_json_stringify_pretty(root, NULL, 2);
+    ASSERT(out == NULL);
     nxe_json_free(root);
 }
 
@@ -957,6 +1054,10 @@ main(void)
     /* stringify_compact */
     RUN(stringify_compact_basic);
     RUN(stringify_compact_roundtrip);
+    RUN(stringify_encodes_scalar_root);
+    RUN(stringify_pretty_has_newlines_and_indent);
+    RUN(stringify_pretty_clamps_indent);
+    RUN(stringify_pretty_null_inputs);
 
     /* edge cases */
     RUN(type_on_null);

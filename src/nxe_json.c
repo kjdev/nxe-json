@@ -544,8 +544,9 @@ nxe_json_compare(nxe_json_t *a, nxe_json_t *b, double *diff,
 }
 
 
-ngx_str_t *
-nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool)
+static ngx_str_t *
+nxe_json_stringify_flags(nxe_json_t *json, ngx_pool_t *pool,
+    size_t jansson_flags, const char *tag)
 {
     json_t *j = NXE_JSON_CAST(json);
     ngx_str_t *result;
@@ -557,14 +558,16 @@ nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool)
 
     if (j == NULL || pool == NULL) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                      "nxe_json: stringify_compact, NULL input");
+                      "nxe_json: %s, NULL input", tag);
         return NULL;
     }
 
-    s = json_dumps(j, JSON_COMPACT);
+    /* JSON_ENCODE_ANY so scalar roots (accepted by JSON_DECODE_ANY in
+     * nxe_json_parse) also serialize; plain json_dumps rejects them. */
+    s = json_dumps(j, jansson_flags | JSON_ENCODE_ANY);
     if (s == NULL) {
         ngx_log_error(NGX_LOG_ERR, log, 0,
-                      "nxe_json: stringify_compact, json_dumps failed");
+                      "nxe_json: %s, json_dumps failed", tag);
         return NULL;
     }
 
@@ -588,4 +591,28 @@ nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool)
     free(s);
 
     return result;
+}
+
+
+ngx_str_t *
+nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool)
+{
+    return nxe_json_stringify_flags(json, pool, JSON_COMPACT,
+                                    "stringify_compact");
+}
+
+
+ngx_str_t *
+nxe_json_stringify_pretty(nxe_json_t *json, ngx_pool_t *pool,
+    ngx_uint_t indent)
+{
+    if (indent == 0) {
+        indent = 1;
+    }
+    if (indent > 31) {
+        indent = 31;
+    }
+
+    return nxe_json_stringify_flags(json, pool, JSON_INDENT(indent),
+                                    "stringify_pretty");
 }

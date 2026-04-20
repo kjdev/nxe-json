@@ -260,6 +260,26 @@ ngx_str_t *nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool);
 
 
 /*
+ * Serialize to a pretty-printed JSON string, allocated on pool.
+ *
+ * Wraps jansson's JSON_INDENT, so members are placed on separate lines
+ * with `indent` spaces per nesting level.  `indent` is clamped to
+ * [1, 31] (jansson's supported range); 0 is promoted to 1 so the
+ * result stays distinct from stringify_compact (JSON_INDENT(0) would
+ * still emit newlines with no indentation).
+ *
+ * @param[in] json    JSON value to serialize
+ * @param[in] pool    nginx pool for the result
+ * @param[in] indent  spaces per indent level (clamped to [1, 31];
+ *                    0 is promoted to 1)
+ *
+ * @return allocated ngx_str_t, or NULL on error.
+ */
+ngx_str_t *nxe_json_stringify_pretty(nxe_json_t *json, ngx_pool_t *pool,
+    ngx_uint_t indent);
+
+
+/*
  * Type predicates.
  */
 

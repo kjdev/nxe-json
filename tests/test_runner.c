@@ -1075,6 +1075,180 @@ TEST(stringify_pretty_null_inputs){
 
 
 /* ============================================================ */
+/* defensive zero-clear on failure                               */
+/* ============================================================ */
+
+/*
+ * Verifies that every extractor clears its out-parameter before
+ * returning a non-OK result.  Callers that forget to check the return
+ * value then read a deterministic zero instead of stack garbage, which
+ * closes the silent-downgrade window raised by the security audit for
+ * nxe_json_object_get_integer / _boolean (tasks/issues/008.md).
+ *
+ * Each subcase seeds the out-param with a sentinel ("poison") first and
+ * asserts the sentinel is gone after the failing call.
+ */
+TEST(extractor_zero_clears_on_failure){
+    ngx_str_t input =
+        sz("{\"s\":\"hi\",\"n\":1,\"r\":1.5,\"b\":true,\"z\":null}");
+    nxe_json_t *root, *sv, *nv, *rv, *bv, *zv;
+    ngx_str_t sout;
+    int64_t iout;
+    double dout;
+    ngx_flag_t fout;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    sv = nxe_json_object_get(root, "s");
+    nv = nxe_json_object_get(root, "n");
+    rv = nxe_json_object_get(root, "r");
+    bv = nxe_json_object_get(root, "b");
+    zv = nxe_json_object_get(root, "z");
+    ASSERT(sv != NULL && nv != NULL && rv != NULL
+           && bv != NULL && zv != NULL);
+
+    /* nxe_json_string: type mismatch */
+    sout.data = (u_char *) "poison";
+    sout.len = 6;
+    ASSERT_EQ_INT(nxe_json_string(nv, &sout), NGX_ERROR);
+    ASSERT(sout.data == NULL);
+    ASSERT_EQ_INT(sout.len, 0);
+
+    /* nxe_json_string: NULL handle */
+    sout.data = (u_char *) "poison";
+    sout.len = 6;
+    ASSERT_EQ_INT(nxe_json_string(NULL, &sout), NGX_ERROR);
+    ASSERT(sout.data == NULL);
+    ASSERT_EQ_INT(sout.len, 0);
+
+    /* nxe_json_integer: type mismatch (string) */
+    iout = 0x5a5a5a5a;
+    ASSERT_EQ_INT(nxe_json_integer(sv, &iout), NGX_ERROR);
+    ASSERT_EQ_INT(iout, 0);
+
+    /* nxe_json_integer: type mismatch (real is not integer) */
+    iout = 0x5a5a5a5a;
+    ASSERT_EQ_INT(nxe_json_integer(rv, &iout), NGX_ERROR);
+    ASSERT_EQ_INT(iout, 0);
+
+    /* nxe_json_integer: NULL handle */
+    iout = 0x5a5a5a5a;
+    ASSERT_EQ_INT(nxe_json_integer(NULL, &iout), NGX_ERROR);
+    ASSERT_EQ_INT(iout, 0);
+
+    /* nxe_json_real: type mismatch (integer is not real) */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_real(nv, &dout), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_real: NULL handle */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_real(NULL, &dout), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_boolean: type mismatch */
+    fout = 0x5a;
+    ASSERT_EQ_INT(nxe_json_boolean(nv, &fout), NGX_ERROR);
+    ASSERT_EQ_INT(fout, 0);
+
+    /* nxe_json_boolean: NULL handle */
+    fout = 0x5a;
+    ASSERT_EQ_INT(nxe_json_boolean(NULL, &fout), NGX_ERROR);
+    ASSERT_EQ_INT(fout, 0);
+
+    /* nxe_json_number: type mismatch (boolean is not a number) */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_number(bv, &dout), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_number: null is not a number */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_number(zv, &dout), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_number: NULL handle */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_number(NULL, &dout), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_object_get_string: missing key */
+    sout.data = (u_char *) "poison";
+    sout.len = 6;
+    ASSERT_EQ_INT(nxe_json_object_get_string(root, "missing", &sout,
+                                             pool),
+                  NGX_DECLINED);
+    ASSERT(sout.data == NULL);
+    ASSERT_EQ_INT(sout.len, 0);
+
+    /* nxe_json_object_get_string: type mismatch */
+    sout.data = (u_char *) "poison";
+    sout.len = 6;
+    ASSERT_EQ_INT(nxe_json_object_get_string(root, "n", &sout, pool),
+                  NGX_DECLINED);
+    ASSERT(sout.data == NULL);
+    ASSERT_EQ_INT(sout.len, 0);
+
+    /* nxe_json_object_get_string: NULL pool (defensive zero-clear
+     * still applies once the value pointer itself is non-NULL, to
+     * match the other extractors). */
+    sout.data = (u_char *) "poison";
+    sout.len = 6;
+    ASSERT_EQ_INT(nxe_json_object_get_string(root, "s", &sout, NULL),
+                  NGX_ERROR);
+    ASSERT(sout.data == NULL);
+    ASSERT_EQ_INT(sout.len, 0);
+
+    /* nxe_json_object_get_integer: missing key */
+    iout = 0x5a5a5a5a;
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "missing", &iout),
+                  NGX_DECLINED);
+    ASSERT_EQ_INT(iout, 0);
+
+    /* nxe_json_object_get_integer: type mismatch */
+    iout = 0x5a5a5a5a;
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "s", &iout),
+                  NGX_DECLINED);
+    ASSERT_EQ_INT(iout, 0);
+
+    /* nxe_json_object_get_boolean: missing key */
+    fout = 0x5a;
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "missing", &fout),
+                  NGX_DECLINED);
+    ASSERT_EQ_INT(fout, 0);
+
+    /* nxe_json_object_get_boolean: type mismatch */
+    fout = 0x5a;
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "n", &fout),
+                  NGX_DECLINED);
+    ASSERT_EQ_INT(fout, 0);
+
+    /* nxe_json_compare: non-numeric input clears *diff */
+    dout = 12345.0;
+    ASSERT_EQ_INT(nxe_json_compare(sv, nv, &dout, NULL), NGX_ERROR);
+    ASSERT_EQ_DOUBLE(dout, 0.0);
+
+    /* nxe_json_compare: fail-closed on |int| > 2^53 vs non-integer
+     * real must also clear *diff so callers that skip the return
+     * check cannot read a stale sentinel. */
+    {
+        ngx_str_t unsafe = sz("[9007199254740993,1.5]");
+        nxe_json_t *uroot = nxe_json_parse(&unsafe, pool);
+
+        ASSERT(uroot != NULL);
+        dout = 12345.0;
+        ASSERT_EQ_INT(nxe_json_compare(nxe_json_array_get(uroot, 0),
+                                       nxe_json_array_get(uroot, 1),
+                                       &dout, NULL), NGX_ERROR);
+        ASSERT_EQ_DOUBLE(dout, 0.0);
+        nxe_json_free(uroot);
+    }
+
+    nxe_json_free(root);
+}
+
+
+/* ============================================================ */
 /* type dispatch & edge cases                                    */
 /* ============================================================ */
 
@@ -1166,6 +1340,9 @@ main(void)
     RUN(stringify_pretty_has_newlines_and_indent);
     RUN(stringify_pretty_clamps_indent);
     RUN(stringify_pretty_null_inputs);
+
+    /* defensive zero-clear */
+    RUN(extractor_zero_clears_on_failure);
 
     /* edge cases */
     RUN(type_on_null);

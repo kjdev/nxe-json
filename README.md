@@ -52,7 +52,7 @@ reference:
 | `nxe_json_parse` / `_parse_untrusted` | Parse JSON bytes |
 | `nxe_json_free` | Release the handle tree |
 | `nxe_json_type` / `_is_*` | Type inspection |
-| `nxe_json_object_get` / `_get_ns` / `_get_string` | Object access |
+| `nxe_json_object_get` / `_get_ns` / `_get_string` / `_get_integer` / `_get_boolean` | Object access |
 | `nxe_json_array_size` / `_array_get` | Array access |
 | `nxe_json_string` / `_integer` / `_real` / `_boolean` / `_number` | Scalar extraction |
 | `nxe_json_from_string` | Construct a string value |

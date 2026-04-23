@@ -1,5 +1,26 @@
 # Changelog
 
+## [e52d4c1](../../commit/e52d4c1) - 2026-04-23
+
+### Added
+
+- Add `nxe_json_object_get_integer(json, key, *int64_t)` and
+  `nxe_json_object_get_boolean(json, key, *ngx_flag_t)` convenience
+  helpers
+  - Mirror the existing `nxe_json_object_get_string` pattern so typed
+    members can be fetched in one call instead of chaining
+    `nxe_json_object_get` with `nxe_json_integer` /
+    `nxe_json_boolean`
+  - Unlike `_get_string`, neither helper takes a pool argument
+    because the extracted value types do not require allocation
+  - Return values follow the same tri-state convention as
+    `_get_string`: `NGX_OK` on success, `NGX_DECLINED` if the key is
+    missing or the value is of the wrong type, `NGX_ERROR` if the
+    output pointer is NULL
+  - Unit tests cover the happy path, missing keys, type mismatches
+    (string / real vs integer, integer / string vs boolean), NULL
+    out pointer, and NULL root
+
 ## [d182aea](../../commit/d182aea) - 2026-04-21
 
 ### Added

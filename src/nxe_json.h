@@ -145,13 +145,21 @@ nxe_json_t *nxe_json_object_get_ns(nxe_json_t *json, ngx_str_t *key);
 /*
  * Convenience: fetch a string member and copy it into the pool.
  *
+ * Allocates on pool; on success the result is a fresh copy owned by
+ * the caller (not a borrowed reference into jansson).  Empty strings
+ * are returned with value->data == NULL and value->len == 0.
+ * Missing key and wrong value type collapse into the same NGX_DECLINED
+ * result; callers that need to distinguish them should use
+ * nxe_json_object_get() + nxe_json_string().
+ *
  * *value is only meaningful when NGX_OK is returned.  On failure it is
  * zero-cleared (value->data = NULL, value->len = 0) as a defensive
  * safeguard against callers that forget to check the return value;
  * callers must still check the return value before reading *value.
  *
  * @return NGX_OK on success (value->data allocated on pool),
- *         NGX_DECLINED if the key is missing or not a string,
+ *         NGX_DECLINED if json is NULL / not an object, key is NULL,
+ *         the key is missing, or the value is not a string,
  *         NGX_ERROR if value or pool is NULL, or on allocation failure.
  */
 ngx_int_t nxe_json_object_get_string(nxe_json_t *json, const char *key,

@@ -288,7 +288,14 @@ nxe_json_object_get_string(nxe_json_t *json, const char *key,
     ngx_str_t tmp;
     u_char *buf;
 
-    if (value == NULL || pool == NULL) {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    value->data = NULL;
+    value->len = 0;
+
+    if (pool == NULL) {
         return NGX_ERROR;
     }
 
@@ -302,8 +309,6 @@ nxe_json_object_get_string(nxe_json_t *json, const char *key,
     }
 
     if (tmp.len == 0) {
-        value->data = NULL;
-        value->len = 0;
         return NGX_OK;
     }
 
@@ -332,6 +337,8 @@ nxe_json_object_get_integer(nxe_json_t *json, const char *key,
         return NGX_ERROR;
     }
 
+    *value = 0;
+
     v = nxe_json_object_get(json, key);
     if (v == NULL) {
         return NGX_DECLINED;
@@ -354,6 +361,8 @@ nxe_json_object_get_boolean(nxe_json_t *json, const char *key,
     if (value == NULL) {
         return NGX_ERROR;
     }
+
+    *value = 0;
 
     v = nxe_json_object_get(json, key);
     if (v == NULL) {
@@ -400,7 +409,14 @@ nxe_json_string(nxe_json_t *json, ngx_str_t *value)
     json_t *j = NXE_JSON_CAST(json);
     const char *s;
 
-    if (j == NULL || value == NULL || !json_is_string(j)) {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    value->data = NULL;
+    value->len = 0;
+
+    if (j == NULL || !json_is_string(j)) {
         return NGX_ERROR;
     }
 
@@ -421,7 +437,13 @@ nxe_json_integer(nxe_json_t *json, int64_t *value)
 {
     json_t *j = NXE_JSON_CAST(json);
 
-    if (j == NULL || value == NULL || !json_is_integer(j)) {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    *value = 0;
+
+    if (j == NULL || !json_is_integer(j)) {
         return NGX_ERROR;
     }
 
@@ -436,7 +458,13 @@ nxe_json_real(nxe_json_t *json, double *value)
 {
     json_t *j = NXE_JSON_CAST(json);
 
-    if (j == NULL || value == NULL || !json_is_real(j)) {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    *value = 0.0;
+
+    if (j == NULL || !json_is_real(j)) {
         return NGX_ERROR;
     }
 
@@ -451,9 +479,13 @@ nxe_json_boolean(nxe_json_t *json, ngx_flag_t *value)
 {
     json_t *j = NXE_JSON_CAST(json);
 
-    if (j == NULL || value == NULL
-        || (!json_is_true(j) && !json_is_false(j)))
-    {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    *value = 0;
+
+    if (j == NULL || (!json_is_true(j) && !json_is_false(j))) {
         return NGX_ERROR;
     }
 
@@ -468,7 +500,13 @@ nxe_json_number(nxe_json_t *json, double *value)
 {
     json_t *j = NXE_JSON_CAST(json);
 
-    if (j == NULL || value == NULL) {
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    *value = 0.0;
+
+    if (j == NULL) {
         return NGX_ERROR;
     }
 
@@ -524,6 +562,8 @@ nxe_json_compare(nxe_json_t *a, nxe_json_t *b, double *diff,
     if (a == NULL || b == NULL || diff == NULL) {
         return NGX_ERROR;
     }
+
+    *diff = 0.0;
 
     if (nxe_json_integer(a, &ia) == NGX_OK
         && nxe_json_integer(b, &ib) == NGX_OK)

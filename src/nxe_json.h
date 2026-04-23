@@ -145,6 +145,11 @@ nxe_json_t *nxe_json_object_get_ns(nxe_json_t *json, ngx_str_t *key);
 /*
  * Convenience: fetch a string member and copy it into the pool.
  *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared (value->data = NULL, value->len = 0) as a defensive
+ * safeguard against callers that forget to check the return value;
+ * callers must still check the return value before reading *value.
+ *
  * @return NGX_OK on success (value->data allocated on pool),
  *         NGX_DECLINED if the key is missing or not a string,
  *         NGX_ERROR if value or pool is NULL, or on allocation failure.
@@ -160,6 +165,10 @@ ngx_int_t nxe_json_object_get_string(nxe_json_t *json, const char *key,
  * jansson node.  Missing key and wrong value type collapse into the
  * same NGX_DECLINED result; callers that need to distinguish them
  * should still use nxe_json_object_get() + nxe_json_integer().
+ *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
  *
  * @return NGX_OK on success,
  *         NGX_DECLINED if json is NULL / not an object, key is NULL,
@@ -177,6 +186,10 @@ ngx_int_t nxe_json_object_get_integer(nxe_json_t *json, const char *key,
  * false).  Missing key and wrong value type collapse into the same
  * NGX_DECLINED result; callers that need to distinguish them should
  * still use nxe_json_object_get() + nxe_json_boolean().
+ *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
  *
  * @return NGX_OK on success (*value set to 1 for true, 0 for false),
  *         NGX_DECLINED if json is NULL / not an object, key is NULL,
@@ -206,6 +219,11 @@ nxe_json_t *nxe_json_array_get(nxe_json_t *json, size_t index);
  * On success, value->data points into jansson-owned storage and remains
  * valid until the parent is freed.  The string is binary-safe.
  *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared (value->data = NULL, value->len = 0) as a defensive
+ * safeguard; callers must still check the return value before reading
+ * *value.
+ *
  * @return NGX_OK on success, NGX_ERROR if the handle is not a string.
  */
 ngx_int_t nxe_json_string(nxe_json_t *json, ngx_str_t *value);
@@ -213,6 +231,10 @@ ngx_int_t nxe_json_string(nxe_json_t *json, ngx_str_t *value);
 
 /*
  * Extract an integer value.
+ *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
  *
  * @return NGX_OK on success, NGX_ERROR if the handle is not an integer.
  */
@@ -222,6 +244,10 @@ ngx_int_t nxe_json_integer(nxe_json_t *json, int64_t *value);
 /*
  * Extract a real (double) value.
  *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
+ *
  * @return NGX_OK on success, NGX_ERROR if the handle is not a real.
  */
 ngx_int_t nxe_json_real(nxe_json_t *json, double *value);
@@ -229,6 +255,10 @@ ngx_int_t nxe_json_real(nxe_json_t *json, double *value);
 
 /*
  * Extract a boolean value (1 for true, 0 for false).
+ *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
  *
  * @return NGX_OK on success, NGX_ERROR if the handle is not a boolean.
  */
@@ -241,6 +271,10 @@ ngx_int_t nxe_json_boolean(nxe_json_t *json, ngx_flag_t *value);
  * Precision note: integer values with magnitude above 2^53 lose
  * precision when converted to double.  For precision-preserving
  * integer comparison, use nxe_json_compare() instead.
+ *
+ * *value is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *value.
  *
  * @return NGX_OK on success, NGX_ERROR if the handle is not a number.
  */
@@ -277,6 +311,10 @@ ngx_flag_t nxe_json_equal(nxe_json_t *a, nxe_json_t *b);
  *   - NaN / Inf operands return NGX_ERROR.
  *
  * On success *diff is -1.0, 0.0, or 1.0 (sign of a - b).
+ *
+ * *diff is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared as a defensive safeguard; callers must still check the
+ * return value before reading *diff.
  *
  * @return NGX_OK on success, NGX_ERROR on non-numeric input or a lossy
  *         comparison that must be rejected.

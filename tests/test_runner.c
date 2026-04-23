@@ -468,6 +468,112 @@ TEST(object_get_string_convenience){
 }
 
 
+TEST(object_get_integer_convenience){
+    ngx_str_t input =
+        sz("{\"exp\":1700000000,\"s\":\"x\",\"r\":1.5,\"z\":null}");
+    ngx_str_t arr_input = sz("[1,2,3]");
+    nxe_json_t *root, *arr;
+    int64_t n;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "exp", &n), NGX_OK);
+    ASSERT_EQ_INT(n, 1700000000);
+
+    /* missing key */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "missing", &n),
+                  NGX_DECLINED);
+
+    /* wrong type: string */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "s", &n),
+                  NGX_DECLINED);
+
+    /* wrong type: real (not integer) */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "r", &n),
+                  NGX_DECLINED);
+
+    /* wrong type: null */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "z", &n),
+                  NGX_DECLINED);
+
+    /* NULL key (delegated to object_get which returns NULL) */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, NULL, &n),
+                  NGX_DECLINED);
+
+    /* NULL out param */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(root, "exp", NULL),
+                  NGX_ERROR);
+
+    /* NULL root: object_get returns NULL -> DECLINED */
+    ASSERT_EQ_INT(nxe_json_object_get_integer(NULL, "exp", &n),
+                  NGX_DECLINED);
+
+    /* non-object root */
+    arr = nxe_json_parse(&arr_input, pool);
+    ASSERT(arr != NULL);
+    ASSERT_EQ_INT(nxe_json_object_get_integer(arr, "exp", &n),
+                  NGX_DECLINED);
+    nxe_json_free(arr);
+
+    nxe_json_free(root);
+}
+
+
+TEST(object_get_boolean_convenience){
+    ngx_str_t input =
+        sz("{\"active\":true,\"inactive\":false,\"n\":1,"
+           "\"r\":1.5,\"s\":\"x\",\"z\":null}");
+    nxe_json_t *root;
+    ngx_flag_t b;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "active", &b),
+                  NGX_OK);
+    ASSERT_EQ_INT(b, 1);
+
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "inactive", &b),
+                  NGX_OK);
+    ASSERT_EQ_INT(b, 0);
+
+    /* missing key */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "missing", &b),
+                  NGX_DECLINED);
+
+    /* wrong type: integer */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "n", &b),
+                  NGX_DECLINED);
+
+    /* wrong type: real */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "r", &b),
+                  NGX_DECLINED);
+
+    /* wrong type: string */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "s", &b),
+                  NGX_DECLINED);
+
+    /* wrong type: null */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "z", &b),
+                  NGX_DECLINED);
+
+    /* NULL key */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, NULL, &b),
+                  NGX_DECLINED);
+
+    /* NULL out param */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(root, "active", NULL),
+                  NGX_ERROR);
+
+    /* NULL root: object_get returns NULL -> DECLINED */
+    ASSERT_EQ_INT(nxe_json_object_get_boolean(NULL, "active", &b),
+                  NGX_DECLINED);
+
+    nxe_json_free(root);
+}
+
+
 /* ============================================================ */
 /* array operations                                              */
 /* ============================================================ */
@@ -1023,6 +1129,8 @@ main(void)
     RUN(object_get_ns_null_inputs);
     RUN(object_get_ns_basic);
     RUN(object_get_string_convenience);
+    RUN(object_get_integer_convenience);
+    RUN(object_get_boolean_convenience);
 
     /* array */
     RUN(array_basic);

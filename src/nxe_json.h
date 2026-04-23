@@ -154,6 +154,40 @@ ngx_int_t nxe_json_object_get_string(nxe_json_t *json, const char *key,
 
 
 /*
+ * Convenience: fetch an integer member by key.
+ *
+ * Does not allocate; *value is written directly from the underlying
+ * jansson node.  Missing key and wrong value type collapse into the
+ * same NGX_DECLINED result; callers that need to distinguish them
+ * should still use nxe_json_object_get() + nxe_json_integer().
+ *
+ * @return NGX_OK on success,
+ *         NGX_DECLINED if json is NULL / not an object, key is NULL,
+ *         the key is missing, or the value is not an integer,
+ *         NGX_ERROR if value is NULL.
+ */
+ngx_int_t nxe_json_object_get_integer(nxe_json_t *json, const char *key,
+    int64_t *value);
+
+
+/*
+ * Convenience: fetch a boolean member by key.
+ *
+ * Does not allocate; *value is written directly (1 for true, 0 for
+ * false).  Missing key and wrong value type collapse into the same
+ * NGX_DECLINED result; callers that need to distinguish them should
+ * still use nxe_json_object_get() + nxe_json_boolean().
+ *
+ * @return NGX_OK on success (*value set to 1 for true, 0 for false),
+ *         NGX_DECLINED if json is NULL / not an object, key is NULL,
+ *         the key is missing, or the value is not a boolean,
+ *         NGX_ERROR if value is NULL.
+ */
+ngx_int_t nxe_json_object_get_boolean(nxe_json_t *json, const char *key,
+    ngx_flag_t *value);
+
+
+/*
  * Array length.  Returns 0 if the handle is not an array.
  */
 size_t nxe_json_array_size(nxe_json_t *json);

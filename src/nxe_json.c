@@ -322,6 +322,52 @@ nxe_json_object_get_string(nxe_json_t *json, const char *key,
 }
 
 
+ngx_int_t
+nxe_json_object_get_integer(nxe_json_t *json, const char *key,
+    int64_t *value)
+{
+    nxe_json_t *v;
+
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    v = nxe_json_object_get(json, key);
+    if (v == NULL) {
+        return NGX_DECLINED;
+    }
+
+    if (nxe_json_integer(v, value) != NGX_OK) {
+        return NGX_DECLINED;
+    }
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
+nxe_json_object_get_boolean(nxe_json_t *json, const char *key,
+    ngx_flag_t *value)
+{
+    nxe_json_t *v;
+
+    if (value == NULL) {
+        return NGX_ERROR;
+    }
+
+    v = nxe_json_object_get(json, key);
+    if (v == NULL) {
+        return NGX_DECLINED;
+    }
+
+    if (nxe_json_boolean(v, value) != NGX_OK) {
+        return NGX_DECLINED;
+    }
+
+    return NGX_OK;
+}
+
+
 size_t
 nxe_json_array_size(nxe_json_t *json)
 {

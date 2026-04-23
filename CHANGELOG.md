@@ -1,5 +1,34 @@
 # Changelog
 
+## [d650274](../../commit/d650274) - 2026-04-24
+
+### Fixed
+
+- Zero-clear the output parameter on every non-OK exit of the scalar
+  extractors (`nxe_json_string`, `_integer`, `_real`, `_boolean`,
+  `_number`), the object convenience helpers (`_object_get_string`,
+  `_object_get_integer`, `_object_get_boolean`), and
+  `nxe_json_compare` (`*diff`)
+  - Closes the silent-downgrade window raised by the security audit
+    on `nxe_json_object_get_integer` / `_boolean`
+    (tasks/issues/008.md): callers that forget to check the return
+    value now read a deterministic zero (`0` / `0.0` / empty
+    `ngx_str_t` / false) instead of whatever happened to be on their
+    stack, so garbage can no longer propagate into authorization
+    decisions
+  - Out-param is still written only after the `NULL` guard on the
+    output pointer, so the pre-existing `NGX_ERROR` on `value == NULL`
+    is unchanged and no caller semantics break
+- Document the `*value is only meaningful when NGX_OK is returned`
+  contract explicitly in every extractor's header comment so future
+  API additions follow the same convention
+
+### Changed
+
+- Unit test suite adds `extractor_zero_clears_on_failure` exercising
+  every extractor with a seeded "poison" value to assert the
+  zero-clear on type-mismatch, missing-key, and `NULL` handle paths
+
 ## [e52d4c1](../../commit/e52d4c1) - 2026-04-23
 
 ### Added

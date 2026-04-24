@@ -341,12 +341,16 @@ TEST(parse_untrusted_object_keys_limit){
     ASSERT(buf != NULL);
     buf[off++] = '{';
     for (i = 0; i < n; i++) {
+        int w;
+
         if (i > 0) {
             buf[off++] = ',';
         }
-        off += (size_t) snprintf(buf + off, cap - off,
-                                 "\"k%zu\":%zu", i, i);
+        w = snprintf(buf + off, cap - off, "\"k%zu\":%zu", i, i);
+        ASSERT(w > 0 && (size_t) w < cap - off);
+        off += (size_t) w;
     }
+    ASSERT(off < cap);
     buf[off++] = '}';
 
     input.data = (u_char *) buf;

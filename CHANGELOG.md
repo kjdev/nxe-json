@@ -1,5 +1,27 @@
 # Changelog
 
+## [1d17e82](../../commit/1d17e82) - 2026-04-28
+
+### Added
+
+- Add object iteration API: `nxe_json_object_size`,
+  `nxe_json_object_iter`, `nxe_json_object_iter_next`,
+  `nxe_json_object_iter_key`, `nxe_json_object_iter_value`
+  - Lets callers walk an object in insertion order without first
+    materialising the key set, so consumers like JWKS / userinfo
+    handlers can iterate claims without leaking jansson types or
+    duplicating the foreach idiom across modules
+  - Keys are returned as length-tracked `ngx_str_t` borrowed views
+    into jansson-owned storage (binary-safe via
+    `json_object_iter_key_len`); the parser still rejects NUL bytes
+    in keys, so binary-safe behaviour is bounded by the same
+    upstream constraint as the rest of the API
+  - Iterators are borrowed handles tied to the parent object's
+    lifetime; nxe-json never mutates parsed objects, so they remain
+    valid until `nxe_json_free`
+- Unit tests cover walk / empty object / non-object / NULL inputs /
+  borrowed-view aliasing for the new iteration entry points
+
 ## [d650274](../../commit/d650274) - 2026-04-24
 
 ### Fixed

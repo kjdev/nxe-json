@@ -616,6 +616,163 @@ TEST(array_on_non_array){
 
 
 /* ============================================================ */
+/* object iteration                                              */
+/* ============================================================ */
+
+TEST(object_size_basic){
+    ngx_str_t input = sz("{\"a\":1,\"b\":2,\"c\":3}");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    ASSERT_EQ_INT(nxe_json_object_size(root), 3);
+    ASSERT_EQ_INT(nxe_json_object_size(NULL), 0);
+    nxe_json_free(root);
+}
+
+
+TEST(object_size_on_non_object){
+    ngx_str_t input = sz("[1,2,3]");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    ASSERT_EQ_INT(nxe_json_object_size(root), 0);
+    nxe_json_free(root);
+}
+
+
+TEST(object_iter_walks_all_keys){
+    ngx_str_t input = sz("{\"a\":1,\"b\":2,\"c\":3}");
+    nxe_json_t *root;
+    nxe_json_iter_t *it;
+    ngx_str_t key;
+    int seen = 0;
+    int64_t v;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    for (it = nxe_json_object_iter(root);
+         it != NULL;
+         it = nxe_json_object_iter_next(root, it))
+    {
+        ASSERT_EQ_INT(nxe_json_object_iter_key(it, &key), NGX_OK);
+        ASSERT_EQ_INT(key.len, 1);
+        ASSERT_EQ_INT(nxe_json_integer(nxe_json_object_iter_value(it), &v),
+                      NGX_OK);
+        if (key.data[0] == 'a') {
+            ASSERT_EQ_INT(v, 1);
+            seen |= 1;
+        } else if (key.data[0] == 'b') {
+            ASSERT_EQ_INT(v, 2);
+            seen |= 2;
+        } else if (key.data[0] == 'c') {
+            ASSERT_EQ_INT(v, 3);
+            seen |= 4;
+        } else {
+            /* unexpected key surfaced by the iterator */
+            ASSERT(0);
+        }
+    }
+    ASSERT_EQ_INT(seen, 7);
+
+    nxe_json_free(root);
+}
+
+
+TEST(object_iter_preserves_insertion_order){
+    /* jansson's documented guarantee, also asserted by our header
+     * comment.  Lock it in so a future backend swap cannot regress
+     * silently. */
+    ngx_str_t input = sz("{\"c\":1,\"a\":2,\"b\":3}");
+    nxe_json_t *root;
+    nxe_json_iter_t *it;
+    ngx_str_t key;
+    const char expected[] = { 'c', 'a', 'b' };
+    size_t i = 0;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    for (it = nxe_json_object_iter(root);
+         it != NULL;
+         it = nxe_json_object_iter_next(root, it))
+    {
+        ASSERT(i < sizeof(expected));
+        ASSERT_EQ_INT(nxe_json_object_iter_key(it, &key), NGX_OK);
+        ASSERT_EQ_INT(key.len, 1);
+        ASSERT_EQ_INT(key.data[0], expected[i]);
+        i++;
+    }
+    ASSERT_EQ_INT(i, sizeof(expected));
+
+    nxe_json_free(root);
+}
+
+
+TEST(object_iter_empty_object){
+    ngx_str_t input = sz("{}");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    ASSERT(nxe_json_object_iter(root) == NULL);
+    nxe_json_free(root);
+}
+
+
+TEST(object_iter_on_non_object){
+    ngx_str_t input = sz("[1,2,3]");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    ASSERT(nxe_json_object_iter(root) == NULL);
+    /* Lock in the non-object guard for iter_next as well: the iter
+     * pointer is intentionally bogus because iter_next must reject
+     * the call before dereferencing it. */
+    ASSERT(nxe_json_object_iter_next(root,
+                                     (nxe_json_iter_t *) 0xdead) == NULL);
+    nxe_json_free(root);
+}
+
+
+TEST(object_iter_null_inputs){
+    ngx_str_t key;
+    ASSERT(nxe_json_object_iter(NULL) == NULL);
+    ASSERT(nxe_json_object_iter_next(NULL, NULL) == NULL);
+    ASSERT_EQ_INT(nxe_json_object_iter_key(NULL, &key), NGX_ERROR);
+    ASSERT_EQ_INT(nxe_json_object_iter_key((nxe_json_iter_t *) 0xdead,
+                                           NULL),
+                  NGX_ERROR);
+    ASSERT(nxe_json_object_iter_value(NULL) == NULL);
+}
+
+
+TEST(object_iter_key_returns_borrowed_view){
+    /* Confirms that the returned ngx_str_t aliases jansson-owned
+     * storage and is binary-safe (length-tracked, not NUL-terminated
+     * via the C API).  We do not need an embedded NUL here because
+     * the parser strips them; we only verify the length matches the
+     * key bytes. */
+    ngx_str_t input = sz("{\"long-kid-name\":\"v\"}");
+    nxe_json_t *root;
+    nxe_json_iter_t *it;
+    ngx_str_t key;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    it = nxe_json_object_iter(root);
+    ASSERT(it != NULL);
+    ASSERT_EQ_INT(nxe_json_object_iter_key(it, &key), NGX_OK);
+    ASSERT_EQ_INT(key.len, sizeof("long-kid-name") - 1);
+    ASSERT(ngx_strncmp(key.data, "long-kid-name", key.len) == 0);
+    nxe_json_free(root);
+}
+
+
+/* ============================================================ */
 /* scalar extraction                                             */
 /* ============================================================ */
 
@@ -1313,6 +1470,15 @@ main(void)
     /* array */
     RUN(array_basic);
     RUN(array_on_non_array);
+
+    RUN(object_size_basic);
+    RUN(object_size_on_non_object);
+    RUN(object_iter_walks_all_keys);
+    RUN(object_iter_preserves_insertion_order);
+    RUN(object_iter_empty_object);
+    RUN(object_iter_on_non_object);
+    RUN(object_iter_null_inputs);
+    RUN(object_iter_key_returns_borrowed_view);
 
     /* scalars */
     RUN(string_extraction);

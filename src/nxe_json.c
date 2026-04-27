@@ -403,6 +403,85 @@ nxe_json_array_get(nxe_json_t *json, size_t index)
 }
 
 
+size_t
+nxe_json_object_size(nxe_json_t *json)
+{
+    json_t *obj = NXE_JSON_CAST(json);
+
+    if (obj == NULL || !json_is_object(obj)) {
+        return 0;
+    }
+
+    return json_object_size(obj);
+}
+
+
+nxe_json_iter_t *
+nxe_json_object_iter(nxe_json_t *json)
+{
+    json_t *obj = NXE_JSON_CAST(json);
+
+    if (obj == NULL || !json_is_object(obj)) {
+        return NULL;
+    }
+
+    return (nxe_json_iter_t *) json_object_iter(obj);
+}
+
+
+nxe_json_iter_t *
+nxe_json_object_iter_next(nxe_json_t *json, nxe_json_iter_t *iter)
+{
+    json_t *obj = NXE_JSON_CAST(json);
+
+    if (obj == NULL || !json_is_object(obj) || iter == NULL) {
+        return NULL;
+    }
+
+    return (nxe_json_iter_t *) json_object_iter_next(obj, (void *) iter);
+}
+
+
+ngx_int_t
+nxe_json_object_iter_key(nxe_json_iter_t *iter, ngx_str_t *key)
+{
+    const char *k;
+    size_t klen;
+
+    if (key == NULL) {
+        return NGX_ERROR;
+    }
+
+    key->data = NULL;
+    key->len = 0;
+
+    if (iter == NULL) {
+        return NGX_ERROR;
+    }
+
+    k = json_object_iter_key((void *) iter);
+    if (k == NULL) {
+        return NGX_ERROR;
+    }
+    klen = json_object_iter_key_len((void *) iter);
+
+    key->data = (u_char *) k;
+    key->len = klen;
+    return NGX_OK;
+}
+
+
+nxe_json_t *
+nxe_json_object_iter_value(nxe_json_iter_t *iter)
+{
+    if (iter == NULL) {
+        return NULL;
+    }
+
+    return (nxe_json_t *) json_object_iter_value((void *) iter);
+}
+
+
 ngx_int_t
 nxe_json_string(nxe_json_t *json, ngx_str_t *value)
 {

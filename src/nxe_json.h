@@ -222,6 +222,77 @@ nxe_json_t *nxe_json_array_get(nxe_json_t *json, size_t index);
 
 
 /*
+ * Object key count.  Returns 0 if the handle is not an object.
+ */
+size_t nxe_json_object_size(nxe_json_t *json);
+
+
+/*
+ * Opaque iterator handle for object traversal.
+ *
+ * Underlying implementation is jansson's `void *` iterator, but callers
+ * must treat this as an opaque pointer and use the nxe_json_object_iter*
+ * API.  Iterators are invalidated when the parent object is freed or
+ * mutated; nxe-json never mutates parsed objects, so iterators stay
+ * valid for the lifetime of the parent.
+ */
+typedef void nxe_json_iter_t;
+
+
+/*
+ * Begin an object iteration.  Returns NULL if json is NULL, not an
+ * object, or empty.
+ *
+ * Iteration order matches insertion order (jansson's documented
+ * guarantee).  Pair with nxe_json_object_iter_next() to walk the
+ * remaining keys.
+ *
+ * The returned iterator is a borrowed reference into the parent
+ * object; do not free it.
+ */
+nxe_json_iter_t *nxe_json_object_iter(nxe_json_t *json);
+
+
+/*
+ * Advance to the next key.  Returns NULL when iteration is complete or
+ * if json/iter is NULL.
+ *
+ * Idiom:
+ *
+ *   for (it = nxe_json_object_iter(obj);
+ *        it != NULL;
+ *        it = nxe_json_object_iter_next(obj, it)) {
+ *       ...
+ *   }
+ */
+nxe_json_iter_t *nxe_json_object_iter_next(nxe_json_t *json,
+    nxe_json_iter_t *iter);
+
+
+/*
+ * Borrow the current iterator's key as an ngx_str_t.
+ *
+ * The pointer references jansson-owned storage and stays valid for the
+ * parent object's lifetime.  Binary-safe: the returned length reflects
+ * the raw key bytes including any embedded NUL.
+ *
+ * *key is only meaningful when NGX_OK is returned.  On failure it is
+ * zero-cleared.
+ *
+ * @return NGX_OK on success, NGX_ERROR if iter or key is NULL.
+ */
+ngx_int_t nxe_json_object_iter_key(nxe_json_iter_t *iter, ngx_str_t *key);
+
+
+/*
+ * Borrow the current iterator's value.  Returns a borrowed reference;
+ * see nxe_json_object_get() for ownership rules.  Returns NULL when
+ * iter is NULL.
+ */
+nxe_json_t *nxe_json_object_iter_value(nxe_json_iter_t *iter);
+
+
+/*
  * Extract a string value.
  *
  * On success, value->data points into jansson-owned storage and remains

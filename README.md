@@ -62,9 +62,10 @@ reference:
 
 ## Dependencies
 
-- [jansson](https://github.com/akheron/jansson) — tested against 2.14.
-  The binary-safe APIs (`json_object_getn`, `json_stringn`) require
-  2.10 or newer.
+- [jansson](https://github.com/akheron/jansson) — 2.14 or newer
+  required, tested against 2.14. The length-aware APIs used by
+  nxe-json (`json_object_getn`, `json_object_iter_key_len`) were
+  introduced in 2.14.
 - nginx core headers — types only (`ngx_pool_t`, `ngx_str_t`,
   `ngx_log_t`, ...). HTTP module headers are deliberately not used
   so nxe-json can be shared with non-HTTP (e.g. stream) modules.

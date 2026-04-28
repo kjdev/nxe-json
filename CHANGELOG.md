@@ -1,5 +1,37 @@
 # Changelog
 
+## [1604421](../../commit/1604421) - 2026-04-28
+
+### Added
+
+- Add `nxe_json_free_secure(json)`: a recursive zero-clear pass over
+  the handle (string values, object keys, integer / real scalars)
+  before `json_decref`, so plaintext PII (decoded JWT claims, session
+  attributes, etc.) does not linger in jansson-owned buffers after
+  release
+  - Caller must be the sole owner of the handle: shared sub-trees
+    (extra `json_incref` / borrowed references retained past the
+    parent's lifetime) would have their live copy corrupted by the
+    zero-clear.  The contract is documented but not enforced; a
+    refcount check would tie the API to jansson's internal layout
+  - Best-effort: covers strings reachable from the handle but not
+    jansson's internal lex / strbuffer used during parse, nor
+    stringify results owned by the caller's pool — those remain the
+    caller's responsibility (e.g. `ngx_explicit_bzero` over the source
+    `header_raw` / `payload_raw` bytes immediately after parse)
+  - Internal `nxe_json_explicit_bzero` helper writes through a
+    `volatile unsigned char *` so the optimiser cannot elide the zero
+    stores; portable on `-std=c99` without requiring `_DEFAULT_SOURCE`
+    or platform-specific primitives
+- Unit tests cover scalar string root, object value, object key,
+  array element, mixed nested structure, and the integer / real /
+  null / boolean walk paths.  A size-tracking jansson allocator
+  installed only for the secure-free batch lets the test harness
+  observe freed buffer contents and assert no captured allocation
+  still contains the plaintext sentinel — paired with a baseline
+  test that confirms plain `nxe_json_free` does leak the sentinel,
+  so the contrast proves the zero-clear ran
+
 ## [1d17e82](../../commit/1d17e82) - 2026-04-28
 
 ### Added

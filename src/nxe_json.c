@@ -212,6 +212,120 @@ nxe_json_free(nxe_json_t *json)
 }
 
 
+/* Compiler-resistant zero of `n` bytes at `s`.
+ *
+ * Uses a volatile pointer so the writes cannot be elided as dead stores
+ * by the optimiser.  Kept portable (C99) so the test build does not
+ * need _DEFAULT_SOURCE / _GNU_SOURCE just to expose explicit_bzero;
+ * production builds that compile with those macros set are free to
+ * substitute the libc primitive without changing the API. */
+static void
+nxe_json_explicit_bzero(void *s, size_t n)
+{
+    volatile unsigned char *p;
+
+    if (s == NULL || n == 0) {
+        return;
+    }
+
+    p = (volatile unsigned char *) s;
+    while (n-- > 0) {
+        *p++ = 0;
+    }
+}
+
+
+/* Recursively zero string values, object keys, and numeric scalars.
+ *
+ * Walks the tree and writes through pointers returned by jansson's
+ * public accessors (json_string_value, json_object_iter_key) which are
+ * `const char *` by contract but back malloc'd buffers in jansson 2.14;
+ * the const cast lets us scrub the bytes in place before json_decref
+ * frees them.  Numeric scalars are overwritten via json_integer_set /
+ * json_real_set so the value stored inline in the json_t is zero by
+ * the time the wrapper is reclaimed.
+ *
+ * Iteration order does not matter for correctness, but the walk
+ * advances object iterators after zeroing the current key: jansson's
+ * iter_next traverses the insertion-order linked list inside the
+ * hashtable bucket, not a hash-based lookup, so zeroing the key bytes
+ * mid-iteration does not break the walk. */
+static void
+nxe_json_secure_zero_walk(json_t *j)
+{
+    json_t *child;
+    void *iter;
+    const char *s;
+    const char *key;
+    size_t i;
+    size_t len;
+
+    if (j == NULL) {
+        return;
+    }
+
+    switch (json_typeof(j)) {
+
+    case JSON_STRING:
+        s = json_string_value(j);
+        len = json_string_length(j);
+        if (s != NULL && len > 0) {
+            nxe_json_explicit_bzero((void *) (uintptr_t) s, len);
+        }
+        break;
+
+    case JSON_INTEGER:
+        (void) json_integer_set(j, 0);
+        break;
+
+    case JSON_REAL:
+        (void) json_real_set(j, 0.0);
+        break;
+
+    case JSON_ARRAY:
+        for (i = 0; i < json_array_size(j); i++) {
+            child = json_array_get(j, i);
+            nxe_json_secure_zero_walk(child);
+        }
+        break;
+
+    case JSON_OBJECT:
+        iter = json_object_iter(j);
+        while (iter != NULL) {
+            child = json_object_iter_value(iter);
+            nxe_json_secure_zero_walk(child);
+
+            key = json_object_iter_key(iter);
+            len = json_object_iter_key_len(iter);
+            if (key != NULL && len > 0) {
+                nxe_json_explicit_bzero((void *) (uintptr_t) key, len);
+            }
+
+            iter = json_object_iter_next(j, iter);
+        }
+        break;
+
+    case JSON_NULL:
+    case JSON_TRUE:
+    case JSON_FALSE:
+    default:
+        break;
+    }
+}
+
+
+void
+nxe_json_free_secure(nxe_json_t *json)
+{
+    if (json == NULL) {
+        return;
+    }
+
+    nxe_json_secure_zero_walk(NXE_JSON_CAST(json));
+    json_decref(NXE_JSON_CAST(json));
+}
+
+
 nxe_json_type_t
 nxe_json_type(nxe_json_t *json)
 {

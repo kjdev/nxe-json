@@ -111,6 +111,31 @@ void nxe_json_free(nxe_json_t *json);
 
 
 /*
+ * Release a JSON handle, zero-clearing all string values, object keys,
+ * and numeric scalars before decref.  Intended for handles that hold
+ * PII or other sensitive material (decoded JWT payloads, session
+ * attributes, etc.) so the plaintext is not left lingering in
+ * jansson-owned buffers after free.
+ *
+ * Caller must be the sole owner of the handle.  If any sub-tree has
+ * been shared via json_incref (or by retaining a borrowed reference
+ * past the parent's lifetime), zero-clearing will corrupt the live
+ * copy.  This contract is documented but not enforced; reference-count
+ * inspection would tie the API to jansson's internal layout.
+ *
+ * Best-effort: covers strings reachable from `json` at call time but
+ * cannot reach jansson's internal lex buffers used during parse, nor
+ * strings produced by nxe_json_stringify_* (those buffers are owned
+ * by the caller's pool and the caller is responsible for clearing
+ * them, e.g. via ngx_explicit_bzero).
+ *
+ * Safe to call with NULL.  Borrowed references from nxe_json_object_get
+ * or nxe_json_array_get must NOT be passed here.
+ */
+void nxe_json_free_secure(nxe_json_t *json);
+
+
+/*
  * Determine the type of a JSON value.  Returns NXE_JSON_INVALID for a
  * NULL handle.
  */

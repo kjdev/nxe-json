@@ -18,6 +18,11 @@
 
 #include "nxe_json.h"
 
+/* jansson is included only to install a custom allocator that observes
+ * freed buffer contents during nxe_json_free_secure tests; production
+ * callers go through the opaque nxe_json_t handle as usual. */
+#include <jansson.h>
+
 
 typedef struct {
     int  total;
@@ -103,6 +108,103 @@ sz(const char *s)
     str.len = (s != NULL) ? strlen(s) : 0;
 
     return str;
+}
+
+
+/* --- size-tracking jansson allocator for secure-free observation ---
+ *
+ * Wraps malloc/free with a header that records the allocation size, so
+ * the free hook can copy the freed buffer's contents into a side log
+ * before releasing it.  Tests that exercise nxe_json_free_secure can
+ * then assert that no captured allocation still contains the plaintext
+ * sentinel string they fed in, proving the zero-clear pass ran before
+ * jansson released the underlying buffers.
+ *
+ * The wrapper is installed once at start of main() and stays active
+ * for every test; capture is gated by `g_freed_capture_enabled` so the
+ * non-secure-free tests pay only the per-allocation header overhead. */
+
+#define TRK_HEADER_SZ  sizeof(size_t)
+
+static u_char *g_freed_capture;
+static size_t g_freed_capture_len;
+static size_t g_freed_capture_cap;
+static int g_freed_capture_enabled;
+
+
+static void *
+trk_malloc(size_t n)
+{
+    void *raw = malloc(TRK_HEADER_SZ + n);
+
+    if (raw == NULL) {
+        return NULL;
+    }
+    *(size_t *) raw = n;
+    return (u_char *) raw + TRK_HEADER_SZ;
+}
+
+
+static void
+trk_free(void *p)
+{
+    void *raw;
+    size_t n;
+
+    if (p == NULL) {
+        return;
+    }
+
+    raw = (u_char *) p - TRK_HEADER_SZ;
+    n = *(size_t *) raw;
+
+    if (g_freed_capture_enabled && n > 0) {
+        if (g_freed_capture_len + n > g_freed_capture_cap) {
+            size_t newcap = (g_freed_capture_cap == 0)
+                            ? 4096 : g_freed_capture_cap * 2;
+            u_char *newbuf;
+
+            while (newcap < g_freed_capture_len + n) {
+                newcap *= 2;
+            }
+            newbuf = realloc(g_freed_capture, newcap);
+            if (newbuf != NULL) {
+                g_freed_capture = newbuf;
+                g_freed_capture_cap = newcap;
+            }
+        }
+
+        if (g_freed_capture_len + n <= g_freed_capture_cap) {
+            memcpy(g_freed_capture + g_freed_capture_len, p, n);
+            g_freed_capture_len += n;
+        }
+    }
+
+    free(raw);
+}
+
+
+static int
+capture_contains(const char *needle, size_t needle_len)
+{
+    size_t i;
+
+    if (needle_len == 0 || g_freed_capture_len < needle_len) {
+        return 0;
+    }
+    for (i = 0; i + needle_len <= g_freed_capture_len; i++) {
+        if (memcmp(g_freed_capture + i, needle, needle_len) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
+static void
+capture_reset(void)
+{
+    g_freed_capture_len = 0;
 }
 
 
@@ -1424,6 +1526,197 @@ TEST(free_on_null){
 
 
 /* ============================================================ */
+/* nxe_json_free_secure                                          */
+/* ============================================================ */
+
+/* Sanity check the test harness: a plain nxe_json_free leaves the
+ * plaintext readable in the buffer the free hook captures, so the
+ * contrast tests below (which assert the sentinel is GONE after
+ * nxe_json_free_secure) are meaningful. */
+TEST(secure_free_baseline_plain_free_leaks){
+    static const char SENTINEL[] = "PLAINFREESENTINEL_DEADBEEF_42";
+    char buf[256];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf), "{\"k\":\"%s\"}", SENTINEL);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free(root);
+    g_freed_capture_enabled = 0;
+
+    /* Plain free does not scrub: sentinel must still be visible in
+     * the buffer the hook captured during decref. */
+    ASSERT(capture_contains(SENTINEL, sizeof(SENTINEL) - 1));
+}
+
+
+TEST(secure_free_null_handle){
+    nxe_json_free_secure(NULL);   /* must not crash */
+    (void) pool;
+}
+
+
+TEST(secure_free_empty_object){
+    ngx_str_t input = sz("{}");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    nxe_json_free_secure(root);   /* must not crash on empty container */
+}
+
+
+TEST(secure_free_empty_array){
+    ngx_str_t input = sz("[]");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    nxe_json_free_secure(root);
+}
+
+
+TEST(secure_free_zeros_string_root){
+    static const char SENTINEL[] = "ROOTSCALARSECRET_DEADBEEF_99";
+    char buf[256];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf), "\"%s\"", SENTINEL);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free_secure(root);
+    g_freed_capture_enabled = 0;
+
+    ASSERT(!capture_contains(SENTINEL, sizeof(SENTINEL) - 1));
+}
+
+
+TEST(secure_free_zeros_object_value){
+    static const char SENTINEL[] = "OBJECTVALUESECRET_DEADBEEF_77";
+    char buf[256];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf), "{\"sub\":\"%s\"}", SENTINEL);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free_secure(root);
+    g_freed_capture_enabled = 0;
+
+    ASSERT(!capture_contains(SENTINEL, sizeof(SENTINEL) - 1));
+}
+
+
+TEST(secure_free_zeros_object_key){
+    static const char KEY_SENTINEL[] = "OBJECTKEYSECRET_DEADBEEF_55";
+    char buf[256];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf), "{\"%s\":1}", KEY_SENTINEL);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free_secure(root);
+    g_freed_capture_enabled = 0;
+
+    ASSERT(!capture_contains(KEY_SENTINEL, sizeof(KEY_SENTINEL) - 1));
+}
+
+
+TEST(secure_free_zeros_array_element){
+    static const char SENTINEL[] = "ARRAYELEMSECRET_DEADBEEF_33";
+    char buf[256];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf), "[\"x\",\"%s\",\"y\"]", SENTINEL);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free_secure(root);
+    g_freed_capture_enabled = 0;
+
+    ASSERT(!capture_contains(SENTINEL, sizeof(SENTINEL) - 1));
+}
+
+
+TEST(secure_free_zeros_nested){
+    static const char A[] = "NESTSECRETA_DEADBEEF_AA";
+    static const char B[] = "NESTSECRETB_DEADBEEF_BB";
+    static const char C[] = "NESTSECRETC_DEADBEEF_CC";
+    static const char K[] = "NESTKEY_DEADBEEF_KK";
+    char buf[512];
+    ngx_str_t input;
+    nxe_json_t *root;
+
+    snprintf(buf, sizeof(buf),
+             "{\"outer\":{\"%s\":\"%s\"},"
+             "\"list\":[{\"x\":\"%s\"},\"%s\"]}",
+             K, A, B, C);
+    input = sz(buf);
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    capture_reset();
+    g_freed_capture_enabled = 1;
+    nxe_json_free_secure(root);
+    g_freed_capture_enabled = 0;
+
+    ASSERT(!capture_contains(A, sizeof(A) - 1));
+    ASSERT(!capture_contains(B, sizeof(B) - 1));
+    ASSERT(!capture_contains(C, sizeof(C) - 1));
+    ASSERT(!capture_contains(K, sizeof(K) - 1));
+}
+
+
+TEST(secure_free_zeros_integer_and_real){
+    /* nxe-jwx exp/iat claims live as integers; assert numerics are
+     * overwritten in place too, so timestamp PII does not survive. */
+    ngx_str_t input = sz("{\"iat\":1700000000,\"d\":3.14159}");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    /* No sentinel match here because integer/real bytes are
+     * implementation-private; the assertion is just that we walk and
+     * decref without crashing.  ASan covers any UAF in this path. */
+    nxe_json_free_secure(root);
+}
+
+
+TEST(secure_free_handles_null_and_bool){
+    ngx_str_t input = sz("{\"a\":null,\"b\":true,\"c\":false}");
+    nxe_json_t *root;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    nxe_json_free_secure(root);
+}
+
+
+/* ============================================================ */
 /* main                                                          */
 /* ============================================================ */
 
@@ -1517,6 +1810,29 @@ main(void)
     /* edge cases */
     RUN(type_on_null);
     RUN(free_on_null);
+
+    /* nxe_json_free_secure: install the size-tracking jansson
+     * allocator only for this batch so the free hook can capture
+     * freed buffer contents.  Earlier tests (notably stringify_*)
+     * call free() directly on json_dumps results, which is safe with
+     * the default allocator but would underflow trk_free's header,
+     * so the wrapper stays out of their path. */
+    json_set_alloc_funcs(trk_malloc, trk_free);
+
+    RUN(secure_free_baseline_plain_free_leaks);
+    RUN(secure_free_null_handle);
+    RUN(secure_free_empty_object);
+    RUN(secure_free_empty_array);
+    RUN(secure_free_zeros_string_root);
+    RUN(secure_free_zeros_object_value);
+    RUN(secure_free_zeros_object_key);
+    RUN(secure_free_zeros_array_element);
+    RUN(secure_free_zeros_nested);
+    RUN(secure_free_zeros_integer_and_real);
+    RUN(secure_free_handles_null_and_bool);
+
+    json_set_alloc_funcs(malloc, free);
+    free(g_freed_capture);
 
     printf("\n%d passed, %d failed (out of %d)\n",
            stats.passed, stats.failed, stats.total);

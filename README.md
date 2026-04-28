@@ -41,6 +41,14 @@ opaque `nxe_json_t *` handle, so consumers do not have to include
 - **Compact and pretty serialisation** — `nxe_json_stringify_compact`
   and `nxe_json_stringify_pretty` (wraps `JSON_INDENT`, clamped to
   `[1, 31]`).
+- **Secure free for sensitive payloads** — `nxe_json_free_secure`
+  recursively zeroes string values, object keys, and numeric scalars
+  reachable from the handle before `json_decref`, so plaintext PII
+  (decoded JWT claims, session attributes) does not linger in
+  jansson-owned buffers after release. Best-effort: it cannot reach
+  jansson's internal lex buffer used during parse, nor stringify
+  results owned by the caller's pool. Caller must be the sole owner of
+  the handle.
 
 ## API overview
 
@@ -51,6 +59,7 @@ reference:
 |---------|---------|
 | `nxe_json_parse` / `_parse_untrusted` | Parse JSON bytes |
 | `nxe_json_free` | Release the handle tree |
+| `nxe_json_free_secure` | Zero strings/keys/numbers, then release |
 | `nxe_json_type` / `_is_*` | Type inspection |
 | `nxe_json_object_get` / `_get_ns` / `_get_string` / `_get_integer` / `_get_boolean` | Object access |
 | `nxe_json_object_size` / `_object_iter` / `_object_iter_next` / `_object_iter_key` / `_object_iter_value` | Object iteration |

@@ -1236,6 +1236,89 @@ TEST(stringify_pretty_null_inputs){
 
 
 /* ============================================================ */
+/* stringify_compact_sorted                                      */
+/* ============================================================ */
+
+TEST(stringify_compact_sorted_orders_keys){
+    /* Insertion order (b, a, c) must be rewritten as ascending key
+     * order (a, b, c) in the sorted output. */
+    ngx_str_t input = sz("{\"b\":1,\"a\":2,\"c\":3}");
+    nxe_json_t *root;
+    ngx_str_t *out;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    out = nxe_json_stringify_compact_sorted(root, pool);
+    ASSERT(out != NULL);
+    ASSERT_STR_EQ(*out, "{\"a\":2,\"b\":1,\"c\":3}");
+
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_compact_sorted_orders_nested_keys){
+    /* Nested objects must also be sorted at every level. */
+    ngx_str_t input =
+        sz("{\"z\":{\"y\":1,\"x\":2},\"a\":{\"c\":3,\"b\":4}}");
+    nxe_json_t *root;
+    ngx_str_t *out;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    out = nxe_json_stringify_compact_sorted(root, pool);
+    ASSERT(out != NULL);
+    ASSERT_STR_EQ(*out, "{\"a\":{\"b\":4,\"c\":3},\"z\":{\"x\":2,\"y\":1}}");
+
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_compact_sorted_matches_compact_when_no_object){
+    /* Inputs without any object should serialize identically to the
+     * unsorted variant (sorting is a no-op). */
+    ngx_str_t array_input = sz("[3,1,2]");
+    ngx_str_t scalar_input = sz("42");
+    nxe_json_t *root;
+    ngx_str_t *sorted, *plain;
+
+    root = nxe_json_parse(&array_input, pool);
+    ASSERT(root != NULL);
+    sorted = nxe_json_stringify_compact_sorted(root, pool);
+    plain = nxe_json_stringify_compact(root, pool);
+    ASSERT(sorted != NULL && plain != NULL);
+    ASSERT_STR_EQ(*sorted, "[3,1,2]");
+    ASSERT_EQ_INT(sorted->len, plain->len);
+    ASSERT(memcmp(sorted->data, plain->data, sorted->len) == 0);
+    nxe_json_free(root);
+
+    root = nxe_json_parse(&scalar_input, pool);
+    ASSERT(root != NULL);
+    sorted = nxe_json_stringify_compact_sorted(root, pool);
+    ASSERT(sorted != NULL);
+    ASSERT_STR_EQ(*sorted, "42");
+    nxe_json_free(root);
+}
+
+
+TEST(stringify_compact_sorted_null_inputs){
+    ngx_str_t input = sz("{\"b\":1,\"a\":2}");
+    nxe_json_t *root;
+    ngx_str_t *out;
+
+    out = nxe_json_stringify_compact_sorted(NULL, pool);
+    ASSERT(out == NULL);
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    out = nxe_json_stringify_compact_sorted(root, NULL);
+    ASSERT(out == NULL);
+    nxe_json_free(root);
+}
+
+
+/* ============================================================ */
 /* defensive zero-clear on failure                               */
 /* ============================================================ */
 
@@ -1510,6 +1593,12 @@ main(void)
     RUN(stringify_pretty_has_newlines_and_indent);
     RUN(stringify_pretty_clamps_indent);
     RUN(stringify_pretty_null_inputs);
+
+    /* stringify_compact_sorted */
+    RUN(stringify_compact_sorted_orders_keys);
+    RUN(stringify_compact_sorted_orders_nested_keys);
+    RUN(stringify_compact_sorted_matches_compact_when_no_object);
+    RUN(stringify_compact_sorted_null_inputs);
 
     /* defensive zero-clear */
     RUN(extractor_zero_clears_on_failure);

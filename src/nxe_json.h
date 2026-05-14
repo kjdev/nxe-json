@@ -405,9 +405,31 @@ ngx_int_t nxe_json_compare(nxe_json_t *a, nxe_json_t *b,
 /*
  * Serialize to a compact (no whitespace) JSON string, allocated on pool.
  *
+ * Object member order follows insertion order (jansson's documented
+ * behaviour for parsed input).  When deterministic, key-sorted output
+ * is required (cache keys, stable test fixtures, comparing serialized
+ * forms), use nxe_json_stringify_compact_sorted() instead.
+ *
  * @return allocated ngx_str_t, or NULL on error.
  */
 ngx_str_t *nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool);
+
+
+/*
+ * Serialize to a compact JSON string with object keys emitted in
+ * ascending byte order at every nesting level, allocated on pool.
+ *
+ * Wraps jansson's JSON_SORT_KEYS, so two structurally equal objects
+ * always produce byte-identical output regardless of how each was
+ * constructed or parsed.  Array element order is preserved (arrays are
+ * inherently ordered in JSON).  Use this when callers need a
+ * canonical, stable serialization; otherwise prefer
+ * nxe_json_stringify_compact(), which avoids the per-object sort.
+ *
+ * @return allocated ngx_str_t, or NULL on error.
+ */
+ngx_str_t *nxe_json_stringify_compact_sorted(nxe_json_t *json,
+    ngx_pool_t *pool);
 
 
 /*

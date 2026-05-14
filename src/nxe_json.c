@@ -768,6 +768,15 @@ nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool)
 
 
 ngx_str_t *
+nxe_json_stringify_compact_sorted(nxe_json_t *json, ngx_pool_t *pool)
+{
+    return nxe_json_stringify_flags(json, pool,
+                                    JSON_COMPACT | JSON_SORT_KEYS,
+                                    "stringify_compact_sorted");
+}
+
+
+ngx_str_t *
 nxe_json_stringify_pretty(nxe_json_t *json, ngx_pool_t *pool,
     ngx_uint_t indent)
 {

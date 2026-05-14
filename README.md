@@ -40,7 +40,9 @@ opaque `nxe_json_t *` handle, so consumers do not have to include
   runtime dependency is jansson.
 - **Compact and pretty serialisation** — `nxe_json_stringify_compact`
   and `nxe_json_stringify_pretty` (wraps `JSON_INDENT`, clamped to
-  `[1, 31]`).
+  `[1, 31]`). A `nxe_json_stringify_compact_sorted` variant emits
+  object keys in ascending byte order at every level for
+  deterministic, canonical output.
 
 ## API overview
 
@@ -58,7 +60,7 @@ reference:
 | `nxe_json_string` / `_integer` / `_real` / `_boolean` / `_number` | Scalar extraction |
 | `nxe_json_from_string` | Construct a string value |
 | `nxe_json_equal` / `_compare` | Comparison |
-| `nxe_json_stringify_compact` / `_stringify_pretty` | Serialisation |
+| `nxe_json_stringify_compact` / `_stringify_compact_sorted` / `_stringify_pretty` | Serialisation |
 
 ## Dependencies
 

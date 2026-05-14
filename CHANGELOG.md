@@ -1,5 +1,23 @@
 # Changelog
 
+## [60a25fc](../../commit/60a25fc) - 2026-05-14
+
+### Added
+
+- Add `nxe_json_stringify_compact_sorted`, a sorted variant of the
+  compact serializer that emits object keys in ascending byte order at
+  every nesting level
+  - Lets callers that need canonical, deterministic output (cache
+    keys, stable test fixtures, byte-level comparison of serialized
+    forms) stay inside the opaque nxe-json API instead of reaching for
+    jansson's `JSON_SORT_KEYS` directly
+  - Implemented as a thin wrapper over the existing
+    `nxe_json_stringify_flags` helper; insertion-order semantics of
+    `nxe_json_stringify_compact` are unchanged
+- Unit tests cover key reordering on a flat object, recursive sorting
+  through nested objects, idempotence on scalar / array inputs, and
+  NULL handle / NULL pool guards
+
 ## [1d17e82](../../commit/1d17e82) - 2026-04-28
 
 ### Added

@@ -1117,6 +1117,8 @@ TEST(stringify_compact_basic){
             ASSERT(out->data[i] != '\t');
         }
     }
+    /* NUL-terminated: data[len] is past the JSON bytes */
+    ASSERT(out->data[out->len] == '\0');
 
     nxe_json_free(root);
 }
@@ -1135,6 +1137,7 @@ TEST(stringify_encodes_scalar_root){
     out = nxe_json_stringify_compact(root, pool);
     ASSERT(out != NULL);
     ASSERT_STR_EQ(*out, "42");
+    ASSERT(out->data[out->len] == '\0');
 
     nxe_json_free(root);
 }
@@ -1151,6 +1154,7 @@ TEST(stringify_compact_roundtrip){
     out = nxe_json_stringify_compact(root, pool);
     ASSERT(out != NULL);
     ASSERT_STR_EQ(*out, "[1,2,3]");
+    ASSERT(out->data[out->len] == '\0');
 
     nxe_json_free(root);
 }
@@ -1168,6 +1172,7 @@ TEST(stringify_pretty_has_newlines_and_indent){
 
     out = nxe_json_stringify_pretty(root, pool, 2);
     ASSERT(out != NULL);
+    ASSERT(out->data[out->len] == '\0');
 
     for (i = 0; i < out->len; i++) {
         if (out->data[i] == '\n') {
@@ -1206,9 +1211,11 @@ TEST(stringify_pretty_clamps_indent){
     out_zero = nxe_json_stringify_pretty(root, pool, 0);
     ASSERT(out_zero != NULL);
     ASSERT(out_zero->len > 3);
+    ASSERT(out_zero->data[out_zero->len] == '\0');
 
     out_huge = nxe_json_stringify_pretty(root, pool, 100);
     ASSERT(out_huge != NULL);
+    ASSERT(out_huge->data[out_huge->len] == '\0');
     {
         nxe_json_t *reparsed = nxe_json_parse(out_huge, pool);
         ASSERT(reparsed != NULL);
@@ -1252,6 +1259,7 @@ TEST(stringify_compact_sorted_orders_keys){
     out = nxe_json_stringify_compact_sorted(root, pool);
     ASSERT(out != NULL);
     ASSERT_STR_EQ(*out, "{\"a\":2,\"b\":1,\"c\":3}");
+    ASSERT(out->data[out->len] == '\0');
 
     nxe_json_free(root);
 }
@@ -1270,6 +1278,7 @@ TEST(stringify_compact_sorted_orders_nested_keys){
     out = nxe_json_stringify_compact_sorted(root, pool);
     ASSERT(out != NULL);
     ASSERT_STR_EQ(*out, "{\"a\":{\"b\":4,\"c\":3},\"z\":{\"x\":2,\"y\":1}}");
+    ASSERT(out->data[out->len] == '\0');
 
     nxe_json_free(root);
 }
@@ -1291,6 +1300,8 @@ TEST(stringify_compact_sorted_matches_compact_when_no_object){
     ASSERT_STR_EQ(*sorted, "[3,1,2]");
     ASSERT_EQ_INT(sorted->len, plain->len);
     ASSERT(memcmp(sorted->data, plain->data, sorted->len) == 0);
+    ASSERT(sorted->data[sorted->len] == '\0');
+    ASSERT(plain->data[plain->len] == '\0');
     nxe_json_free(root);
 
     root = nxe_json_parse(&scalar_input, pool);
@@ -1298,6 +1309,7 @@ TEST(stringify_compact_sorted_matches_compact_when_no_object){
     sorted = nxe_json_stringify_compact_sorted(root, pool);
     ASSERT(sorted != NULL);
     ASSERT_STR_EQ(*sorted, "42");
+    ASSERT(sorted->data[sorted->len] == '\0');
     nxe_json_free(root);
 }
 
@@ -1315,6 +1327,37 @@ TEST(stringify_compact_sorted_null_inputs){
     out = nxe_json_stringify_compact_sorted(root, NULL);
     ASSERT(out == NULL);
     nxe_json_free(root);
+}
+
+
+TEST(stringify_compact_nul_terminates_binary_safe_value){
+    /* Build a string value containing an embedded NUL via the
+     * binary-safe from_string path, serialize it, and verify:
+     *   - the JSON output escapes the embedded NUL as \u0000 (so the
+     *     buffer body itself contains no NUL bytes)
+     *   - data[len] is the explicit terminator (== '\0'), independent
+     *     of any payload bytes
+     *   - len matches strlen(data) because the escape preserves that
+     *     equivalence for serialized output
+     */
+    u_char raw[] = { 'a', 0, 'b' };
+    ngx_str_t str = { 3, raw };
+    nxe_json_t *j = nxe_json_from_string(&str);
+    ngx_str_t *out;
+    size_t i;
+
+    ASSERT(j != NULL);
+
+    out = nxe_json_stringify_compact(j, pool);
+    ASSERT(out != NULL);
+    ASSERT_STR_EQ(*out, "\"a\\u0000b\"");
+    ASSERT(out->data[out->len] == '\0');
+    for (i = 0; i < out->len; i++) {
+        ASSERT(out->data[i] != '\0');
+    }
+    ASSERT_EQ_INT(strlen((char *) out->data), out->len);
+
+    nxe_json_free(j);
 }
 
 
@@ -1599,6 +1642,7 @@ main(void)
     RUN(stringify_compact_sorted_orders_nested_keys);
     RUN(stringify_compact_sorted_matches_compact_when_no_object);
     RUN(stringify_compact_sorted_null_inputs);
+    RUN(stringify_compact_nul_terminates_binary_safe_value);
 
     /* defensive zero-clear */
     RUN(extractor_zero_clears_on_failure);

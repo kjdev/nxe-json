@@ -410,6 +410,12 @@ ngx_int_t nxe_json_compare(nxe_json_t *a, nxe_json_t *b,
  * is required (cache keys, stable test fixtures, comparing serialized
  * forms), use nxe_json_stringify_compact_sorted() instead.
  *
+ * The returned buffer is NUL-terminated (`data[len] == '\0'`); `len`
+ * does not include the terminator, so binary-safe consumers reading
+ * by length are unaffected.  Callers can pass `data` directly to APIs
+ * that expect a C string (strlen, %s, ngx_strchr) without an extra
+ * copy.
+ *
  * @return allocated ngx_str_t, or NULL on error.
  */
 ngx_str_t *nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool);
@@ -426,6 +432,9 @@ ngx_str_t *nxe_json_stringify_compact(nxe_json_t *json, ngx_pool_t *pool);
  * canonical, stable serialization; otherwise prefer
  * nxe_json_stringify_compact(), which avoids the per-object sort.
  *
+ * The returned buffer is NUL-terminated (`data[len] == '\0'`); `len`
+ * does not include the terminator.
+ *
  * @return allocated ngx_str_t, or NULL on error.
  */
 ngx_str_t *nxe_json_stringify_compact_sorted(nxe_json_t *json,
@@ -440,6 +449,9 @@ ngx_str_t *nxe_json_stringify_compact_sorted(nxe_json_t *json,
  * [1, 31] (jansson's supported range); 0 is promoted to 1 so the
  * result stays distinct from stringify_compact (JSON_INDENT(0) would
  * still emit newlines with no indentation).
+ *
+ * The returned buffer is NUL-terminated (`data[len] == '\0'`); `len`
+ * does not include the terminator.
  *
  * @param[in] json    JSON value to serialize
  * @param[in] pool    nginx pool for the result

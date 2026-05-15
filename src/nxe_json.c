@@ -744,7 +744,11 @@ nxe_json_stringify_flags(nxe_json_t *json, ngx_pool_t *pool,
         return NULL;
     }
 
-    result->data = ngx_pnalloc(pool, len);
+    /* allocate len + 1 so callers can pass data directly to APIs that
+     * expect a C string (strlen, %s, ngx_strchr, ...); len excludes the
+     * terminator so binary-safe consumers reading by length are unaffected
+     */
+    result->data = ngx_pnalloc(pool, len + 1);
     if (result->data == NULL) {
         free(s);
         return NULL;
@@ -752,6 +756,7 @@ nxe_json_stringify_flags(nxe_json_t *json, ngx_pool_t *pool,
 
     result->len = len;
     ngx_memcpy(result->data, s, len);
+    result->data[len] = '\0';
 
     free(s);
 

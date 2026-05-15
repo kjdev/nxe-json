@@ -1,5 +1,27 @@
 # Changelog
 
+## [0748d1c](../../commit/0748d1c) - 2026-05-15
+
+### Changed
+
+- `nxe_json_stringify_compact`, `nxe_json_stringify_compact_sorted`,
+  and `nxe_json_stringify_pretty` now return a NUL-terminated buffer
+  (`data[len] == '\0'`); `len` is unchanged and does not include the
+  terminator
+  - Callers can pass `data` directly to APIs that expect a C string
+    (`strlen`, `%s`, `ngx_strchr`) without first making a `+1` copy.
+    Existing length-based binary-safe consumers, including
+    `json_loadb`, are unaffected because `len` semantics are
+    preserved
+  - Implementation switches the internal buffer allocation in
+    `nxe_json_stringify_flags` from `ngx_pnalloc(pool, len)` to
+    `ngx_pnalloc(pool, len + 1)` and writes the explicit terminator
+- Unit tests now assert `data[len] == '\0'` on every existing
+  stringify case, plus a new test that builds a string value with an
+  embedded NUL via `nxe_json_from_string`, serializes it, and
+  verifies the output is correctly NUL-terminated while preserving
+  the JSON escape (`\u0000`) for the embedded byte
+
 ## [60a25fc](../../commit/60a25fc) - 2026-05-14
 
 ### Added

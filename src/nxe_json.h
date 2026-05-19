@@ -379,6 +379,49 @@ nxe_json_t *nxe_json_from_string(ngx_str_t *str);
 
 
 /*
+ * Create a JSON integer node.
+ *
+ * The returned handle is owned by the caller and must be released with
+ * nxe_json_free().  Returns NULL on allocation failure.
+ */
+nxe_json_t *nxe_json_from_integer(int64_t value);
+
+
+/*
+ * Create a JSON boolean node.  Any non-zero value produces JSON true;
+ * zero produces JSON false.
+ *
+ * The returned handle is owned by the caller and must be released with
+ * nxe_json_free().
+ */
+nxe_json_t *nxe_json_from_boolean(ngx_flag_t value);
+
+
+/*
+ * Create a JSON null node.
+ *
+ * The returned handle is owned by the caller and must be released with
+ * nxe_json_free().
+ */
+nxe_json_t *nxe_json_null(void);
+
+
+/*
+ * Return an independent deep copy of src.
+ *
+ * The new tree shares no references with src; freeing one does not
+ * affect the other.  Useful for promoting a borrowed reference
+ * (from nxe_json_object_get / _array_get / _object_iter_value) into a
+ * standalone handle that outlives its original parent.
+ *
+ * The returned handle is owned by the caller and must be released with
+ * nxe_json_free().  Returns NULL if src is NULL or on allocation
+ * failure.
+ */
+nxe_json_t *nxe_json_deep_copy(nxe_json_t *src);
+
+
+/*
  * Deep equality comparison.  Returns 1 if a and b represent the same
  * JSON value, 0 otherwise (including when either operand is NULL).
  */

@@ -620,6 +620,38 @@ nxe_json_from_string(ngx_str_t *str)
 }
 
 
+nxe_json_t *
+nxe_json_from_integer(int64_t value)
+{
+    return (nxe_json_t *) json_integer((json_int_t) value);
+}
+
+
+nxe_json_t *
+nxe_json_from_boolean(ngx_flag_t value)
+{
+    return (nxe_json_t *) (value ? json_true() : json_false());
+}
+
+
+nxe_json_t *
+nxe_json_null(void)
+{
+    return (nxe_json_t *) json_null();
+}
+
+
+nxe_json_t *
+nxe_json_deep_copy(nxe_json_t *src)
+{
+    if (src == NULL) {
+        return NULL;
+    }
+
+    return (nxe_json_t *) json_deep_copy(NXE_JSON_CAST(src));
+}
+
+
 ngx_flag_t
 nxe_json_equal(nxe_json_t *a, nxe_json_t *b)
 {

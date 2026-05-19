@@ -985,6 +985,73 @@ TEST(from_string_rejects_oversized){
 }
 
 
+TEST(from_integer_and_free){
+    int64_t iv = 0;
+    nxe_json_t *j;
+
+    j = nxe_json_from_integer(42);
+    ASSERT(j != NULL);
+    ASSERT(nxe_json_is_integer(j));
+    ASSERT_EQ_INT(nxe_json_type(j), NXE_JSON_INTEGER);
+    ASSERT_EQ_INT(nxe_json_integer(j, &iv), NGX_OK);
+    ASSERT_EQ_INT(iv, 42);
+    nxe_json_free(j);
+
+    /* edge values: 0, negative, INT64 limits */
+    j = nxe_json_from_integer(0);
+    ASSERT(nxe_json_integer(j, &iv) == NGX_OK && iv == 0);
+    nxe_json_free(j);
+
+    j = nxe_json_from_integer(-1);
+    ASSERT(nxe_json_integer(j, &iv) == NGX_OK && iv == -1);
+    nxe_json_free(j);
+
+    j = nxe_json_from_integer(INT64_MAX);
+    ASSERT(nxe_json_integer(j, &iv) == NGX_OK && iv == INT64_MAX);
+    nxe_json_free(j);
+
+    j = nxe_json_from_integer(INT64_MIN);
+    ASSERT(nxe_json_integer(j, &iv) == NGX_OK && iv == INT64_MIN);
+    nxe_json_free(j);
+}
+
+
+TEST(from_boolean_and_free){
+    ngx_flag_t bv = 0;
+    nxe_json_t *j;
+
+    j = nxe_json_from_boolean(1);
+    ASSERT(j != NULL);
+    ASSERT(nxe_json_is_boolean(j));
+    ASSERT_EQ_INT(nxe_json_type(j), NXE_JSON_BOOLEAN);
+    ASSERT_EQ_INT(nxe_json_boolean(j, &bv), NGX_OK);
+    ASSERT_EQ_INT(bv, 1);
+    nxe_json_free(j);
+
+    j = nxe_json_from_boolean(0);
+    ASSERT(nxe_json_is_boolean(j));
+    ASSERT_EQ_INT(nxe_json_boolean(j, &bv), NGX_OK);
+    ASSERT_EQ_INT(bv, 0);
+    nxe_json_free(j);
+
+    /* any non-zero input maps to JSON true */
+    j = nxe_json_from_boolean(42);
+    ASSERT_EQ_INT(nxe_json_boolean(j, &bv), NGX_OK);
+    ASSERT_EQ_INT(bv, 1);
+    nxe_json_free(j);
+}
+
+
+TEST(null_and_free){
+    nxe_json_t *j = nxe_json_null();
+
+    ASSERT(j != NULL);
+    ASSERT(nxe_json_is_null(j));
+    ASSERT_EQ_INT(nxe_json_type(j), NXE_JSON_NULL);
+    nxe_json_free(j);
+}
+
+
 /* ============================================================ */
 /* equal                                                         */
 /* ============================================================ */
@@ -1006,6 +1073,66 @@ TEST(equal_basic){
     nxe_json_free(a);
     nxe_json_free(b);
     nxe_json_free(c);
+}
+
+
+/* ============================================================ */
+/* deep_copy                                                     */
+/* ============================================================ */
+
+TEST(deep_copy_equal){
+    /* A deep copy must compare equal to its source under nxe_json_equal,
+     * across nested containers and every scalar type. */
+    ngx_str_t input = sz("{\"a\":[1,\"x\",null,true],\"b\":{\"k\":-7}}");
+    nxe_json_t *src, *copy;
+
+    src = nxe_json_parse(&input, pool);
+    ASSERT(src != NULL);
+
+    copy = nxe_json_deep_copy(src);
+    ASSERT(copy != NULL);
+    ASSERT_EQ_INT(nxe_json_equal(src, copy), 1);
+
+    nxe_json_free(src);
+    nxe_json_free(copy);
+}
+
+
+TEST(deep_copy_independent){
+    /* A deep copy must be independent of its source: freeing the parent
+     * tree (or a sibling borrowed view) must not invalidate the copy.
+     * Promotes a borrowed reference returned by nxe_json_object_get
+     * into a standalone handle, then frees the parent and reads through
+     * the copy to confirm storage is not aliased.  ASan-run catches any
+     * use-after-free. */
+    ngx_str_t input = sz("{\"member\":{\"k\":\"v\"}}");
+    nxe_json_t *root, *borrowed, *copy, *v;
+    ngx_str_t s;
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+
+    borrowed = nxe_json_object_get(root, "member");
+    ASSERT(borrowed != NULL);
+
+    copy = nxe_json_deep_copy(borrowed);
+    ASSERT(copy != NULL);
+
+    nxe_json_free(root);
+
+    /* copy must remain readable after the source tree is gone */
+    ASSERT(nxe_json_is_object(copy));
+    v = nxe_json_object_get(copy, "k");
+    ASSERT(v != NULL);
+    ASSERT_EQ_INT(nxe_json_string(v, &s), NGX_OK);
+    ASSERT_STR_EQ(s, "v");
+
+    nxe_json_free(copy);
+}
+
+
+TEST(deep_copy_null_input){
+    ASSERT(nxe_json_deep_copy(NULL) == NULL);
 }
 
 
@@ -1663,8 +1790,18 @@ main(void)
     RUN(from_string_binary_safe);
     RUN(from_string_rejects_oversized);
 
+    /* scalar constructors */
+    RUN(from_integer_and_free);
+    RUN(from_boolean_and_free);
+    RUN(null_and_free);
+
     /* equal */
     RUN(equal_basic);
+
+    /* deep_copy */
+    RUN(deep_copy_equal);
+    RUN(deep_copy_independent);
+    RUN(deep_copy_null_input);
 
     /* compare */
     RUN(compare_int_int);

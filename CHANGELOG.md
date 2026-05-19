@@ -1,5 +1,32 @@
 # Changelog
 
+## [af2a796](../../commit/af2a796) - 2026-05-19
+
+### Added
+
+- Add `nxe_json_deep_copy`, `nxe_json_from_integer`,
+  `nxe_json_from_boolean`, and `nxe_json_null` so consumers can stay
+  on the opaque API for every scalar constructor and for promoting a
+  borrowed reference into a standalone handle
+  - Closes the last gaps that left callers (notably
+    nginx-auth-jwt's `validate_requirement`) reaching for jansson
+    directly (`json_deep_copy`, `json_integer`, `json_true` /
+    `json_false`, `json_null`).  The `(const json_t *) handle` cast
+    that worked only because `nxe_json_t` is a `void` typedef can
+    now be removed in favor of the opaque equivalents
+  - New constructors follow the established ownership model: jansson
+    allocates internally and the caller releases with
+    `nxe_json_free`.  No pool argument is taken, matching
+    `nxe_json_from_string`
+  - `nxe_json_deep_copy(NULL)` returns NULL.
+    `nxe_json_from_boolean(v)` collapses any non-zero value to JSON
+    true.  Other inputs are passed through unchanged
+- Unit tests cover round-trips for each constructor (including
+  `INT64_MIN` / `INT64_MAX` edges and non-zero-to-true mapping),
+  `nxe_json_equal` agreement on a deep copy across nested
+  containers, and an ASan-friendly independence test that frees the
+  source tree before reading through the copy
+
 ## [0748d1c](../../commit/0748d1c) - 2026-05-15
 
 ### Changed

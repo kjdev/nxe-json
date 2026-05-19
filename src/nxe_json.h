@@ -295,8 +295,16 @@ nxe_json_t *nxe_json_object_iter_value(nxe_json_iter_t *iter);
 /*
  * Extract a string value.
  *
- * On success, value->data points into jansson-owned storage and remains
- * valid until the parent is freed.  The string is binary-safe.
+ * On success, value->data points into nxe-json-owned storage and remains
+ * valid until the parent is freed.  The string is binary-safe: value->len
+ * reflects the raw byte length, including any embedded NUL bytes.
+ *
+ * The returned buffer is NUL-terminated (`value.data[value.len] == '\0'`);
+ * `value.len` does not include the terminator, so binary-safe consumers
+ * reading by length are unaffected.  Callers MAY pass `value.data`
+ * directly to C string APIs such as `strlen`, `printf("%s", ...)`,
+ * `ngx_strcmp` provided the string contains no embedded NUL bytes
+ * (binary safety is preserved separately via `value.len`).
  *
  * *value is only meaningful when NGX_OK is returned.  On failure it is
  * zero-cleared (value->data = NULL, value->len = 0) as a defensive

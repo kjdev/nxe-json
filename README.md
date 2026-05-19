@@ -34,6 +34,18 @@ opaque `nxe_json_t *` handle, so consumers do not have to include
   `nxe_json_object_get_ns` use length-based jansson APIs, so embedded
   NUL bytes on the caller side are preserved. (Parse-time NUL bytes
   are rejected by jansson's default, which is intentional.)
+- **Scalar construction and deep copy** — `nxe_json_from_integer`,
+  `nxe_json_from_boolean`, and `nxe_json_null` round out the opaque
+  constructor set so callers never need to reach for jansson's
+  `json_integer` / `json_true` / `json_null` directly.
+  `nxe_json_deep_copy` promotes a borrowed reference (from
+  `_object_get` / `_array_get` / `_object_iter_value`) into a
+  standalone handle that outlives the parent tree.
+- **Top-level scalar parse** — both `nxe_json_parse` and
+  `nxe_json_parse_untrusted` accept any JSON value at the root
+  (object, array, or scalar), matching jansson's `JSON_DECODE_ANY`,
+  so callers can read a bare number or string without wrapping it in
+  a container first.
 - **NUL-terminated string extraction** — `nxe_json_string` returns
   `value.data` with `value.data[value.len] == '\0'` as a public
   contract. `value.len` excludes the terminator, so binary-safe
@@ -64,7 +76,8 @@ reference:
 | `nxe_json_object_size` / `_object_iter` / `_object_iter_next` / `_object_iter_key` / `_object_iter_value` | Object iteration |
 | `nxe_json_array_size` / `_array_get` | Array access |
 | `nxe_json_string` / `_integer` / `_real` / `_boolean` / `_number` | Scalar extraction |
-| `nxe_json_from_string` | Construct a string value |
+| `nxe_json_from_string` / `_from_integer` / `_from_boolean` / `_null` | Scalar value construction |
+| `nxe_json_deep_copy` | Independent deep copy of a (possibly borrowed) tree |
 | `nxe_json_equal` / `_compare` | Comparison |
 | `nxe_json_stringify_compact` / `_stringify_compact_sorted` / `_stringify_pretty` | Serialisation |
 

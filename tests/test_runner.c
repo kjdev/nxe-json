@@ -805,6 +805,50 @@ TEST(string_extraction){
 }
 
 
+TEST(string_extraction_nul_terminated){
+    /* Public contract: nxe_json_string() returns value.data with
+     *   value.data[value.len] == '\0'
+     * so callers may pass value.data directly to C string APIs
+     * (strlen, %s, ngx_strcmp) as long as the string contains no
+     * embedded NUL bytes.  Covers both parsed values and values
+     * constructed via nxe_json_from_string, including a binary-safe
+     * input with an embedded NUL byte (where data[len] must still be
+     * the explicit terminator, independent of the payload). */
+    ngx_str_t input = sz("{\"s\":\"hello\"}");
+    nxe_json_t *root, *v, *built;
+    ngx_str_t s;
+    ngx_str_t literal = sz("plain");
+    u_char raw[] = { 'a', 0, 'b' };
+    ngx_str_t bin = { 3, raw };
+
+    root = nxe_json_parse(&input, pool);
+    ASSERT(root != NULL);
+    v = nxe_json_object_get(root, "s");
+    ASSERT(v != NULL);
+    ASSERT_EQ_INT(nxe_json_string(v, &s), NGX_OK);
+    ASSERT_EQ_INT(s.len, 5);
+    ASSERT(s.data[s.len] == '\0');
+    ASSERT_EQ_INT(strlen((char *) s.data), s.len);
+    nxe_json_free(root);
+
+    built = nxe_json_from_string(&literal);
+    ASSERT(built != NULL);
+    ASSERT_EQ_INT(nxe_json_string(built, &s), NGX_OK);
+    ASSERT_EQ_INT(s.len, 5);
+    ASSERT(s.data[s.len] == '\0');
+    ASSERT_EQ_INT(strlen((char *) s.data), s.len);
+    nxe_json_free(built);
+
+    built = nxe_json_from_string(&bin);
+    ASSERT(built != NULL);
+    ASSERT_EQ_INT(nxe_json_string(built, &s), NGX_OK);
+    ASSERT_EQ_INT(s.len, 3);
+    ASSERT(memcmp(s.data, raw, 3) == 0);
+    ASSERT(s.data[s.len] == '\0');
+    nxe_json_free(built);
+}
+
+
 TEST(integer_real_boolean){
     ngx_str_t input = sz(
         "{\"i\":-7,\"r\":3.25,\"t\":true,\"f\":false,\"n\":null}");
@@ -1608,6 +1652,7 @@ main(void)
 
     /* scalars */
     RUN(string_extraction);
+    RUN(string_extraction_nul_terminated);
     RUN(integer_real_boolean);
     RUN(real_rejects_integer);
     RUN(number_accepts_both);

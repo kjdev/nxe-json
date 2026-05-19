@@ -34,6 +34,12 @@ opaque `nxe_json_t *` handle, so consumers do not have to include
   `nxe_json_object_get_ns` use length-based jansson APIs, so embedded
   NUL bytes on the caller side are preserved. (Parse-time NUL bytes
   are rejected by jansson's default, which is intentional.)
+- **NUL-terminated string extraction** — `nxe_json_string` returns
+  `value.data` with `value.data[value.len] == '\0'` as a public
+  contract. `value.len` excludes the terminator, so binary-safe
+  consumers reading by length are unaffected; callers MAY pass
+  `value.data` directly to C string APIs (`strlen`, `%s`, `ngx_strcmp`)
+  as long as the string contains no embedded NUL bytes.
 - **nginx-friendly allocation model** — copied strings and stringify
   results are allocated from `ngx_pool_t`; JSON handles are
   jansson-owned and must be released with `nxe_json_free()`. The only

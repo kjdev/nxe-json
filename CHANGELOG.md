@@ -1,6 +1,11 @@
 # Changelog
 
-## [af2a796](../../commit/af2a796) - 2026-05-19
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [0.5.0] - 2026-05-19
 
 ### Added
 
@@ -27,7 +32,7 @@
   containers, and an ASan-friendly independence test that frees the
   source tree before reading through the copy
 
-## [0748d1c](../../commit/0748d1c) - 2026-05-15
+## [0.4.1] - 2026-05-15
 
 ### Changed
 
@@ -49,7 +54,7 @@
   verifies the output is correctly NUL-terminated while preserving
   the JSON escape (`\u0000`) for the embedded byte
 
-## [60a25fc](../../commit/60a25fc) - 2026-05-14
+## [0.4.0] - 2026-05-14
 
 ### Added
 
@@ -67,7 +72,7 @@
   through nested objects, idempotence on scalar / array inputs, and
   NULL handle / NULL pool guards
 
-## [1d17e82](../../commit/1d17e82) - 2026-04-28
+## [0.3.0] - 2026-04-28
 
 ### Added
 
@@ -89,7 +94,26 @@
 - Unit tests cover walk / empty object / non-object / NULL inputs /
   borrowed-view aliasing for the new iteration entry points
 
-## [d650274](../../commit/d650274) - 2026-04-24
+## [0.2.0] - 2026-04-24
+
+### Added
+
+- Add `nxe_json_object_get_integer(json, key, *int64_t)` and
+  `nxe_json_object_get_boolean(json, key, *ngx_flag_t)` convenience
+  helpers
+  - Mirror the existing `nxe_json_object_get_string` pattern so typed
+    members can be fetched in one call instead of chaining
+    `nxe_json_object_get` with `nxe_json_integer` /
+    `nxe_json_boolean`
+  - Unlike `_get_string`, neither helper takes a pool argument
+    because the extracted value types do not require allocation
+  - Return values follow the same tri-state convention as
+    `_get_string`: `NGX_OK` on success, `NGX_DECLINED` if the key is
+    missing or the value is of the wrong type, `NGX_ERROR` if the
+    output pointer is NULL
+  - Unit tests cover the happy path, missing keys, type mismatches
+    (string / real vs integer, integer / string vs boolean), NULL
+    out pointer, and NULL root
 
 ### Fixed
 
@@ -111,51 +135,11 @@
 - Document the `*value is only meaningful when NGX_OK is returned`
   contract explicitly in every extractor's header comment so future
   API additions follow the same convention
+- Unit tests add `extractor_zero_clears_on_failure` exercising every
+  extractor with a seeded "poison" value to assert the zero-clear on
+  type-mismatch, missing-key, and `NULL` handle paths
 
-### Changed
-
-- Unit test suite adds `extractor_zero_clears_on_failure` exercising
-  every extractor with a seeded "poison" value to assert the
-  zero-clear on type-mismatch, missing-key, and `NULL` handle paths
-
-## [e52d4c1](../../commit/e52d4c1) - 2026-04-23
-
-### Added
-
-- Add `nxe_json_object_get_integer(json, key, *int64_t)` and
-  `nxe_json_object_get_boolean(json, key, *ngx_flag_t)` convenience
-  helpers
-  - Mirror the existing `nxe_json_object_get_string` pattern so typed
-    members can be fetched in one call instead of chaining
-    `nxe_json_object_get` with `nxe_json_integer` /
-    `nxe_json_boolean`
-  - Unlike `_get_string`, neither helper takes a pool argument
-    because the extracted value types do not require allocation
-  - Return values follow the same tri-state convention as
-    `_get_string`: `NGX_OK` on success, `NGX_DECLINED` if the key is
-    missing or the value is of the wrong type, `NGX_ERROR` if the
-    output pointer is NULL
-  - Unit tests cover the happy path, missing keys, type mismatches
-    (string / real vs integer, integer / string vs boolean), NULL
-    out pointer, and NULL root
-
-## [d182aea](../../commit/d182aea) - 2026-04-21
-
-### Added
-
-- Add `nxe_json_stringify_pretty(json, pool, indent)` API
-  - Wraps jansson's `JSON_INDENT(n)` for admin-facing UIs where
-    human readability of the serialised JSON matters
-  - `indent` is clamped to `[1, 31]`; `0` is disallowed because it
-    would still emit newlines (and thus be mistaken for
-    `stringify_compact` while differing in behaviour)
-  - Internal `nxe_json_stringify_flags` helper introduced so both
-    `stringify_compact` and `stringify_pretty` share the same
-    alloc / copy path; only the jansson flag and error tag differ
-  - Unit tests cover newline / indent emission, round-trip parse,
-    indent clamping at both ends, and NULL json / pool guards
-
-## [a20c772](../../commit/a20c772) - 2026-04-21
+## [0.1.0] - 2026-04-21
 
 ### Added
 
@@ -187,11 +171,21 @@
     `nxe_json_compare`; fail-closed on lossy `int64` → `double`
     conversion for two integer operands whose magnitude exceeds 2^53
   - Compact serialisation via `nxe_json_stringify_compact`
+- Add `nxe_json_stringify_pretty(json, pool, indent)` API
+  - Wraps jansson's `JSON_INDENT(n)` for admin-facing UIs where
+    human readability of the serialized JSON matters
+  - `indent` is clamped to `[1, 31]`; `0` is disallowed because it
+    would still emit newlines (and thus be mistaken for
+    `stringify_compact` while differing in behaviour)
+  - Internal `nxe_json_stringify_flags` helper introduced so both
+    `stringify_compact` and `stringify_pretty` share the same
+    alloc / copy path; only the jansson flag and error tag differ
 - Build artefacts for parent-module integration: `config.ngx`
   exposing `nxe_json_module_{deps,srcs,incs,libs}`
 - Unit test suite covering every public API, including DoS-limit
   boundary conditions (oversize input, excessive depth, arrays,
-  strings, key counts), binary-safe construction, and the fail-closed
-  comparison semantics
+  strings, key counts), binary-safe construction, the fail-closed
+  comparison semantics, and the `stringify_pretty` newline / indent /
+  clamp / NULL-guard cases
 - Malloc-backed `ngx_compat` stubs so the test suite runs without a
   real nginx build
